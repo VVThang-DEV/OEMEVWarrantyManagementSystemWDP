@@ -1,5 +1,5 @@
 import express from "express";
-import { validate } from "../middleware/index.js";
+import { authentication, validate } from "../middleware/index.js";
 import loginSchema from "../../validators/login.validator.js";
 const router = express.Router();
 
@@ -312,7 +312,7 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
  *       500:
  *         description: Internal server error
  */
-router.post("/register", async (req, res, next) => {
+router.post("/register", authentication, async (req, res, next) => {
   const authController = req.container.resolve("authController");
 
   await authController.register(req, res, next);

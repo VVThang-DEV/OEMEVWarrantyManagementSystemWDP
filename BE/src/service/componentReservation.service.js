@@ -8,58 +8,24 @@ class ComponentReservationService {
   #componentRepository;
   #caselineRepository;
   #warehouseRepository;
-  #taskAssignmentRepository;
+  #vehicleProcessingRecordRepository;
+  #inventoryService;
 
   constructor({
     componentReservationRepository,
     componentRepository,
     caselineRepository,
     warehouseRepository,
-    taskAssignmentRepository,
+    vehicleProcessingRecordRepository,
+    inventoryService,
   }) {
     this.#componentReservationRepository = componentReservationRepository;
     this.#componentRepository = componentRepository;
     this.#caselineRepository = caselineRepository;
     this.#warehouseRepository = warehouseRepository;
-    this.#taskAssignmentRepository = taskAssignmentRepository;
+    this.#vehicleProcessingRecordRepository = vehicleProcessingRecordRepository;
+    this.#inventoryService = inventoryService;
   }
-
-  #validateReservationById = async (reservationId, transaction) => {
-    const existingConversation =
-      await this.#componentReservationRepository.findById(
-        reservationId,
-        transaction,
-        Transaction.LOCK.UPDATE
-      );
-
-    if (!existingConversation) {
-      throw new Error("Reservation not found");
-    }
-
-    if (existingConversation.status !== "RESERVED") {
-      throw new Error("Only RESERVED components can be picked up");
-    }
-  };
-
-  #validateComponentById = async (updatedReservation, transaction) => {
-    const componentId = updatedReservation?.componentId;
-
-    const component = await this.#componentRepository.findById(
-      componentId,
-      transaction,
-      Transaction.LOCK.UPDATE
-    );
-
-    if (!component) {
-      throw new Error("Component not found");
-    }
-
-    if (component.status !== "RESERVED") {
-      throw new Error("Only RESERVED components can be picked up");
-    }
-
-    return componentId;
-  };
 
   #processUpdateStockItem = async (updatedComponent, transaction) => {
     const typeComponentId = updatedComponent?.typeComponentId;
@@ -78,7 +44,7 @@ class ComponentReservationService {
     const newQuantityInStock = stockItem.quantityInStock - 1;
     const newQuantityReserved = stockItem.quantityReserved - 1;
 
-    await this.#warehouseRepository.updateStockItem(
+    const updatedStock = await this.#warehouseRepository.updateStockItem(
       {
         warehouseId,
         typeComponentId,
@@ -87,6 +53,8 @@ class ComponentReservationService {
       },
       transaction
     );
+
+    return updatedStock?.stockId || stockItem.stockId || null;
   };
 
   pickupReservedComponents = async ({
@@ -94,14 +62,55 @@ class ComponentReservationService {
     serviceCenterId,
     pickedUpByTechId,
   }) => {
+    if (!serviceCenterId) {
+      throw new Error("Service center context is required for pickup");
+    }
+
     const uniqueReservationIds = Array.from(new Set(reservationIds));
 
     const rawResult = await db.sequelize.transaction(async (transaction) => {
       const updatedReservations = [];
       const caseLineIdsForUpdate = new Set();
+      const affectedStockIds = new Set();
 
       for (const reservationId of uniqueReservationIds) {
-        await this.#validateReservationById(reservationId, transaction);
+        const existingReservation =
+          await this.#componentReservationRepository.findById(
+            reservationId,
+            transaction,
+            Transaction.LOCK.UPDATE
+          );
+
+        if (!existingReservation) {
+          throw new Error("Reservation not found");
+        }
+
+        if (existingReservation.status !== "RESERVED") {
+          throw new Error("Only RESERVED components can be picked up");
+        }
+
+        const reservationContext = await this.#caselineRepository.getVinById(
+          existingReservation.caseLineId,
+          transaction,
+          Transaction.LOCK.SHARE
+        );
+
+        if (!reservationContext) {
+          throw new Error("Caseline not found for reservation");
+        }
+
+        const reservationServiceCenterId =
+          reservationContext?.guaranteeCase?.vehicleProcessingRecord
+            ?.createdByStaff?.serviceCenterId || null;
+
+        if (
+          reservationServiceCenterId &&
+          reservationServiceCenterId !== serviceCenterId
+        ) {
+          throw new Error(
+            "Reservation does not belong to the current service center"
+          );
+        }
 
         const updatedReservation =
           await this.#componentReservationRepository.updateReservationStatusPickUp(
@@ -119,10 +128,7 @@ class ComponentReservationService {
           throw new Error("Failed to update reservation status to PICKED_UP");
         }
 
-        const componentId = await this.#validateComponentById(
-          updatedReservation,
-          transaction
-        );
+        const componentId = updatedReservation?.componentId;
 
         const componentBeforeUpdate = await this.#componentRepository.findById(
           componentId,
@@ -136,11 +142,18 @@ class ComponentReservationService {
 
         await this.#componentRepository.updateStatusWithTechnician(
           componentId,
-          { status: "WITH_TECHNICIAN" },
+          { status: "PICKED_UP" },
           transaction
         );
 
-        await this.#processUpdateStockItem(componentBeforeUpdate, transaction);
+        const stockId = await this.#processUpdateStockItem(
+          componentBeforeUpdate,
+          transaction
+        );
+
+        if (stockId) {
+          affectedStockIds.add(stockId);
+        }
 
         if (updatedReservation.caseLineId) {
           caseLineIdsForUpdate.add(updatedReservation.caseLineId);
@@ -159,40 +172,40 @@ class ComponentReservationService {
         );
       }
 
-      return updatedReservations;
+      return {
+        updatedReservations,
+        affectedStockIds: Array.from(affectedStockIds),
+      };
     });
 
-    return rawResult;
+    const { updatedReservations, affectedStockIds } = rawResult;
+
+    if (Array.isArray(affectedStockIds) && affectedStockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: affectedStockIds,
+      });
+    }
+
+    return updatedReservations;
   };
 
-  installComponent = async ({ reservationId }) => {
+  installComponent = async ({ reservationId, serviceCenterId }) => {
     const rawResult = await db.sequelize.transaction(async (transaction) => {
-      const existingConversation =
-        await this.#componentReservationRepository.findById(
-          reservationId,
-          transaction,
-          Transaction.LOCK.UPDATE
-        );
+      const reservation = await this.#componentReservationRepository.findById(
+        reservationId,
+        transaction,
+        Transaction.LOCK.UPDATE
+      );
 
-      if (!existingConversation) {
+      if (!reservation) {
         throw new Error("Reservation not found");
       }
 
-      if (existingConversation.status !== "PICKED_UP") {
+      if (reservation.status !== "PICKED_UP") {
         throw new Error("Only PICKED_UP components can be installed");
       }
 
-      const updatedReservation =
-        await this.#componentReservationRepository.updateReservationStatusInstall(
-          {
-            reservationId,
-            installedAt: formatUTCtzHCM(dayjs()),
-            status: "INSTALLED",
-          },
-          transaction
-        );
-
-      const caseLineId = updatedReservation.caseLineId;
+      const caseLineId = reservation.caseLineId;
 
       const caseline = await this.#caselineRepository.getVinById(
         caseLineId,
@@ -200,9 +213,33 @@ class ComponentReservationService {
         Transaction.LOCK.SHARE
       );
 
-      const vin = caseline?.guaranteeCase?.vehicleProcessingRecord?.vin;
+      if (!caseline) {
+        throw new Error("Caseline not found for reservation");
+      }
 
-      const componentId = updatedReservation?.componentId;
+      const vin = caseline?.guaranteeCase?.vehicleProcessingRecord?.vin;
+      const reservationServiceCenterId =
+        caseline?.guaranteeCase?.vehicleProcessingRecord?.createdByStaff
+          ?.serviceCenterId || null;
+
+      if (!serviceCenterId) {
+        throw new Error("Service center context is required for install");
+      }
+
+      if (
+        reservationServiceCenterId &&
+        reservationServiceCenterId !== serviceCenterId
+      ) {
+        throw new Error(
+          "Reservation does not belong to the current service center"
+        );
+      }
+
+      if (!vin) {
+        throw new Error("Vehicle VIN is missing for the reservation");
+      }
+
+      const componentId = reservation.componentId;
 
       const component = await this.#componentRepository.findById(
         componentId,
@@ -214,117 +251,79 @@ class ComponentReservationService {
         throw new Error("Component not found");
       }
 
-      if (component.status !== "WITH_TECHNICIAN") {
-        throw new Error("Only WITH_TECHNICIAN components can be installed");
-      }
+      const typeComponentId = component.typeComponentId;
+      const now = formatUTCtzHCM(dayjs());
 
-      await this.#componentRepository.updateInstalledComponentStatus(
-        {
-          vehicleVin: vin,
-          componentId: componentId,
-          installedAt: formatUTCtzHCM(dayjs()),
-          status: "INSTALLED",
-          currentHolderId: null,
-        },
-        transaction
-      );
-
-      return updatedReservation;
-    });
-
-    return rawResult;
-  };
-
-  returnReservedComponent = async ({ reservationId, serialNumber }) => {
-    const rawResult = await db.sequelize.transaction(async (transaction) => {
-      const existingConversation = await this.#validateReturnReservationById(
-        reservationId,
-        transaction
-      );
-
-      const existingComponent = await this.#componentRepository.findById(
-        existingConversation.componentId,
-        transaction,
-        Transaction.LOCK.UPDATE
-      );
-
-      if (existingComponent.serialNumber === serialNumber) {
-        throw new Error(
-          "Returning component must be different from the installed one"
-        );
-      }
-
-      const existingReturnComponentBySerial =
-        await this.#componentRepository.findBySerialNumber(
-          serialNumber,
+      let updatedReservation;
+      const componentInVehicle =
+        await this.#componentRepository.findComponentInVehicleProcessingByTypeAndVin(
+          {
+            typeComponentId,
+            vehicleVin: vin,
+          },
           transaction,
           Transaction.LOCK.UPDATE
         );
 
-      if (!existingReturnComponentBySerial) {
-        throw new Error("Component to return not found in the system");
-      }
+      let oldComponentSerial = null;
 
-      if (existingReturnComponentBySerial.status !== "INSTALLED") {
-        throw new Error("Only INSTALLED components can be used for return");
-      }
+      if (componentInVehicle && componentInVehicle.status === "INSTALLED") {
+        oldComponentSerial = componentInVehicle.serialNumber;
 
-      const typeComponentIdOfComponentReturn =
-        existingReturnComponentBySerial.typeComponentId;
+        const removedComponent =
+          await this.#componentRepository.updateRemovedComponentStatus(
+            {
+              vehicleVin: vin,
+              componentId: componentInVehicle.componentId,
+              installedAt: now,
+              status: "REMOVED",
+              currentHolderId: null,
+            },
+            transaction
+          );
 
-      const typeComponentIdOfInstalledComponent =
-        existingComponent.typeComponentId;
-
-      if (
-        typeComponentIdOfComponentReturn !== typeComponentIdOfInstalledComponent
+        if (!removedComponent) {
+          throw new Error("Failed to flag old component as removed");
+        }
+      } else if (
+        componentInVehicle &&
+        componentInVehicle.status !== "INSTALLED"
       ) {
-        throw new Error(
-          "Component type mismatch between installed and returning component"
-        );
+        throw new Error("Existing component must be in INSTALLED status");
       }
 
-      const caseLineId = existingConversation.caseLineId;
-
-      const caseline = await this.#caselineRepository.getVinById(
-        caseLineId,
-        transaction,
-        Transaction.LOCK.SHARE
-      );
-
-      const vin = caseline?.guaranteeCase?.vehicleProcessingRecord?.vin;
-
-      const component = await this.#componentRepository.belongToProcessingByVin(
-        existingReturnComponentBySerial.serialNumber,
-        vin,
-        transaction
-      );
-
-      if (!component) {
-        throw new Error(
-          "The return component does not belong to the vehicle under processing"
-        );
-      }
-
-      const updatedReservation =
-        await this.#componentReservationRepository.updateReservationStatusReturn(
+      const installedComponent =
+        await this.#componentRepository.updateInstalledComponentStatus(
           {
-            reservationId,
-            oldComponentSerial: existingReturnComponentBySerial.serialNumber,
-            oldComponentReturned: true,
-            returnedAt: formatUTCtzHCM(dayjs()),
-            status: "RETURNED",
+            vehicleVin: vin,
+            componentId: componentId,
+            installedAt: now,
+            status: "INSTALLED",
+            currentHolderId: null,
           },
           transaction
         );
 
-      const updatedComponent =
-        await this.#componentRepository.updateStatusComponentReturn(
-          existingReturnComponentBySerial.componentId,
-          { status: "RETURNED" },
+      if (!installedComponent) {
+        throw new Error("Failed to update component status to INSTALLED");
+      }
+
+      updatedReservation =
+        await this.#componentReservationRepository.updateReservationStatusInstall(
+          {
+            reservationId,
+            installedAt: now,
+            oldComponentSerial,
+            status: "INSTALLED",
+          },
           transaction
         );
 
-      return { updatedReservation, updatedComponent };
+      if (!updatedReservation) {
+        throw new Error("Failed to update reservation status to INSTALLED");
+      }
+
+      return updatedReservation;
     });
 
     return rawResult;
@@ -365,29 +364,6 @@ class ComponentReservationService {
     );
 
     return result;
-  };
-
-  #validateReturnReservationById = async (reservationId, transaction) => {
-    const existingReservation =
-      await this.#componentReservationRepository.findById(
-        reservationId,
-        transaction,
-        Transaction.LOCK.UPDATE
-      );
-
-    if (!existingReservation) {
-      throw new Error("Reservation not found");
-    }
-
-    const STATUS_CONSERVATION_CAN_RETURN = ["PICKED_UP", "INSTALLED"];
-
-    if (!STATUS_CONSERVATION_CAN_RETURN.includes(existingReservation.status)) {
-      throw new Error(
-        "Only conservation PICKED_UP or INSTALLED components can be returned"
-      );
-    }
-
-    return existingReservation;
   };
 }
 

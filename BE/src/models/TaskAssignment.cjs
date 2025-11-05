@@ -15,9 +15,9 @@ module.exports = (sequelize, DataTypes) => {
         field: "technician_id",
       },
 
-      guaranteeCaseId: {
+      vehicleProcessingRecordId: {
         type: DataTypes.UUID,
-        field: "guarantee_case_id",
+        field: "vehicle_processing_record_id",
       },
 
       caseLineId: {
@@ -65,9 +65,9 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "case_line_id",
       as: "caseLine",
     });
-    TaskAssignment.belongsTo(models.GuaranteeCase, {
-      foreignKey: "guarantee_case_id",
-      as: "guaranteeCase",
+    TaskAssignment.belongsTo(models.VehicleProcessingRecord, {
+      foreignKey: "vehicle_processing_record_id",
+      as: "vehicleProcessingRecord",
     });
   };
 

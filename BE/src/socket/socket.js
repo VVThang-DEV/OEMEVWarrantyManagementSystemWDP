@@ -28,8 +28,8 @@ export function initializeSocket(httpServer) {
       socket.join(`emv_staff_${companyId}`);
     }
 
-    if (roleName === "parts_coordinator_service_center" && companyId) {
-      socket.join(`parts_coordinator_service_center_${companyId}`);
+    if (roleName === "parts_coordinator_service_center" && serviceCenterId) {
+      socket.join(`parts_coordinator_service_center_${serviceCenterId}`);
     }
 
     if (roleName && serviceCenterId) {

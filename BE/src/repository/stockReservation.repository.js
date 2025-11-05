@@ -12,9 +12,18 @@ class StockReservationRepository {
     return newReservations.map((r) => r.toJSON());
   };
 
-  findByRequestId = async ({ requestId }, transaction = null, lock = null) => {
+  findAll = async ({ where }) => {
+    const reservations = await StockReservation.findAll({ where });
+    return reservations.map((r) => r.toJSON());
+  };
+
+  findByRequestId = async (
+    { requestId, status = "RESERVED" },
+    transaction = null,
+    lock = null
+  ) => {
     const reservations = await StockReservation.findAll({
-      where: { requestId, status: "RESERVED" },
+      where: { requestId, status: status },
       include: [
         {
           model: Stock,

@@ -26,7 +26,6 @@ module.exports = (sequelize, DataTypes) => {
           "RESERVED",
           "PICKED_UP",
           "INSTALLED",
-          "RETURNED",
           "CANCELLED"
         ),
         allowNull: false,
@@ -56,25 +55,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: true,
         field: "old_component_serial",
-      },
-
-      // oldComponentCondition: {
-      //   type: DataTypes.ENUM("DEFECTIVE", "DAMAGED"),
-      //   allowNull: true,
-      //   field: "old_component_condition",
-      // },
-
-      oldComponentReturned: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: false,
-        field: "old_component_returned",
-      },
-
-      returnedAt: {
-        type: DataTypes.DATE,
-        allowNull: true,
-        field: "returned_at",
       },
 
       cancelledAt: {

@@ -1,5 +1,13 @@
+import { where } from "sequelize";
 import db from "../models/index.cjs";
-const { Vehicle, Customer, VehicleModel, VehicleCompany, TypeComponent } = db;
+const {
+  Vehicle,
+  Customer,
+  VehicleModel,
+  VehicleCompany,
+  TypeComponent,
+  Component,
+} = db;
 
 class VehicleRepository {
   findByVinAndCompany = async (
@@ -146,6 +154,69 @@ class VehicleRepository {
     }
 
     return true;
+  };
+
+  findWarrantedComponentsByVehicleVin = async (
+    { vin, companyId, status },
+    option = null
+  ) => {
+    const componentWhere = {};
+
+    if (status && status !== "ALL") {
+      componentWhere.status = status;
+    }
+
+    const vehicle = await Vehicle.findOne({
+      where: {
+        vin: vin,
+      },
+      attributes: ["vin"],
+      include: [
+        {
+          model: VehicleModel,
+          as: "model",
+          attributes: [],
+          required: true,
+          include: [
+            {
+              model: VehicleCompany,
+              as: "company",
+              attributes: [],
+              where: { vehicleCompanyId: companyId },
+              required: true,
+            },
+          ],
+        },
+        {
+          model: Component,
+          as: "components",
+          attributes: ["componentId", "serialNumber", "status", "installedAt"],
+          where:
+            Object.keys(componentWhere).length > 0 ? componentWhere : undefined,
+          required: false,
+          include: [
+            {
+              model: TypeComponent,
+              as: "typeComponent",
+              attributes: [
+                "typeComponentId",
+                "name",
+                "sku",
+                "category",
+                "price",
+              ],
+            },
+          ],
+        },
+      ],
+      transaction: option,
+    });
+
+    if (!vehicle) {
+      return null;
+    }
+
+    return vehicle.toJSON();
   };
 }
 

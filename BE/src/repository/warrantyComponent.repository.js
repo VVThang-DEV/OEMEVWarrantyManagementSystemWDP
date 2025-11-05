@@ -23,10 +23,10 @@ class WarrantyComponentRepository {
     );
   };
 
-  bulkCreateWarrantyComponents = async ({
-    warrantyComponents,
-    transaction,
-  }) => {
+  bulkCreateWarrantyComponents = async (
+    { warrantyComponents },
+    transaction
+  ) => {
     if (!warrantyComponents || warrantyComponents.length === 0) {
       return [];
     }

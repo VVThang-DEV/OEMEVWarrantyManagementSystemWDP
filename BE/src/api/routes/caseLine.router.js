@@ -10,12 +10,12 @@ import {
   caseLineSchema,
   getCaseLineByIdParamsSchema,
   getAllCaselinesQuerySchema,
+  validateOldComponentSerialSchema,
 } from "../../validators/caseLine.validator.js";
 import {
   attachCompanyContext,
   authentication,
   authorizationByRole,
-  ensureOtpVerified,
   validate,
 } from "../middleware/index.js";
 
@@ -697,7 +697,6 @@ router.patch(
   authentication,
   authorizationByRole(["service_center_staff"]),
   validate(approveCaselineBodySchema, "body"),
-  ensureOtpVerified,
   async (req, res, next) => {
     const caseLineController = req.container.resolve("caseLineController");
     await caseLineController.approveCaseline(req, res, next);
@@ -1474,6 +1473,90 @@ router.patch(
     const caseLineController = req.container.resolve("caseLineController");
 
     await caseLineController.markRepairCompleted(req, res, next);
+  }
+);
+
+/**
+ * @swagger
+ * /guarantee-cases/{guaranteeCaseId}/validate-old-component-serial:
+ *   patch:
+ *     summary: Validate old component serial number during diagnosis
+ *     description: Allows a technician to validate the serial number of an old component being replaced against system records during the diagnosis phase. This step must be completed before a new component can be installed.
+ *     tags: [Case Line]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: guaranteeCaseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID of the Guarantee Case
+ *         example: "110f907d-009d-441f-88ad-f9522ae44d0d"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - caseLineId
+ *               - oldComponentSerialNumber
+ *             properties:
+ *               caseLineId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID of the Case Line associated with the component to be validated
+ *                 example: "770e8400-e29b-41d4-a716-446655440003"
+ *               oldComponentSerialNumber:
+ *                 type: string
+ *                 description: Serial number of the old component being removed from the vehicle
+ *                 example: "OLD-BATT-SN-001"
+ *     responses:
+ *       200:
+ *         description: Old component serial number validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "success"
+ *                 message:
+ *                   type: string
+ *                   example: "Old component serial number validated successfully."
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     caseLineId:
+ *                       type: string
+ *                       format: uuid
+ *                       example: "770e8400-e29b-41d4-a716-446655440003"
+ *                     validationStatus:
+ *                       type: string
+ *                       example: "VALIDATED"
+ *       400:
+ *         description: Bad request - Invalid input or serial number mismatch
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - requires service_center_technician role
+ *       404:
+ *         description: Guarantee Case, Case Line, or Component not found
+ *       409:
+ *         description: Conflict - Component serial number mismatch or invalid Case Line status
+ */
+router.patch(
+  "/:caselineId/validate-old-component-serial",
+  authentication,
+  authorizationByRole(["service_center_technician"]),
+  validate(validateOldComponentSerialSchema, "body"),
+  async (req, res, next) => {
+    const caseLineController = req.container.resolve("caseLineController");
+
+    await caseLineController.validateOldComponentSerial(req, res, next);
   }
 );
 
