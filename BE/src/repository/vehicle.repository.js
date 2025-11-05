@@ -156,7 +156,16 @@ class VehicleRepository {
     return true;
   };
 
-  findWarrantedComponentsByVehicleVin = async ({ vin }, option = null) => {
+  findWarrantedComponentsByVehicleVin = async (
+    { vin, companyId, status },
+    option = null
+  ) => {
+    const componentWhere = {};
+
+    if (status && status !== "ALL") {
+      componentWhere.status = status;
+    }
+
     const vehicle = await Vehicle.findOne({
       where: {
         vin: vin,
@@ -164,10 +173,26 @@ class VehicleRepository {
       attributes: ["vin"],
       include: [
         {
+          model: VehicleModel,
+          as: "model",
+          attributes: [],
+          required: true,
+          include: [
+            {
+              model: VehicleCompany,
+              as: "company",
+              attributes: [],
+              where: { vehicleCompanyId: companyId },
+              required: true,
+            },
+          ],
+        },
+        {
           model: Component,
           as: "components",
           attributes: ["componentId", "serialNumber", "status", "installedAt"],
-          where: { status: "INSTALLED" },
+          where:
+            Object.keys(componentWhere).length > 0 ? componentWhere : undefined,
           required: false,
           include: [
             {
@@ -184,6 +209,7 @@ class VehicleRepository {
           ],
         },
       ],
+      transaction: option,
     });
 
     if (!vehicle) {

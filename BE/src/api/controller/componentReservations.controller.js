@@ -67,10 +67,12 @@ class ComponentReservationsController {
 
   installComponent = async (req, res, next) => {
     const { reservationId } = req.params;
+    const { serviceCenterId } = req.user;
 
     const updatedComponent =
       await this.#componentReservationsService.installComponent({
         reservationId,
+        serviceCenterId,
       });
 
     res.status(200).json({

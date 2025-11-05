@@ -62,6 +62,10 @@ class ComponentReservationService {
     serviceCenterId,
     pickedUpByTechId,
   }) => {
+    if (!serviceCenterId) {
+      throw new Error("Service center context is required for pickup");
+    }
+
     const uniqueReservationIds = Array.from(new Set(reservationIds));
 
     const rawResult = await db.sequelize.transaction(async (transaction) => {
@@ -83,6 +87,29 @@ class ComponentReservationService {
 
         if (existingReservation.status !== "RESERVED") {
           throw new Error("Only RESERVED components can be picked up");
+        }
+
+        const reservationContext = await this.#caselineRepository.getVinById(
+          existingReservation.caseLineId,
+          transaction,
+          Transaction.LOCK.SHARE
+        );
+
+        if (!reservationContext) {
+          throw new Error("Caseline not found for reservation");
+        }
+
+        const reservationServiceCenterId =
+          reservationContext?.guaranteeCase?.vehicleProcessingRecord
+            ?.createdByStaff?.serviceCenterId || null;
+
+        if (
+          reservationServiceCenterId &&
+          reservationServiceCenterId !== serviceCenterId
+        ) {
+          throw new Error(
+            "Reservation does not belong to the current service center"
+          );
         }
 
         const updatedReservation =
@@ -162,7 +189,7 @@ class ComponentReservationService {
     return updatedReservations;
   };
 
-  installComponent = async ({ reservationId }) => {
+  installComponent = async ({ reservationId, serviceCenterId }) => {
     const rawResult = await db.sequelize.transaction(async (transaction) => {
       const reservation = await this.#componentReservationRepository.findById(
         reservationId,
@@ -191,6 +218,22 @@ class ComponentReservationService {
       }
 
       const vin = caseline?.guaranteeCase?.vehicleProcessingRecord?.vin;
+      const reservationServiceCenterId =
+        caseline?.guaranteeCase?.vehicleProcessingRecord?.createdByStaff
+          ?.serviceCenterId || null;
+
+      if (!serviceCenterId) {
+        throw new Error("Service center context is required for install");
+      }
+
+      if (
+        reservationServiceCenterId &&
+        reservationServiceCenterId !== serviceCenterId
+      ) {
+        throw new Error(
+          "Reservation does not belong to the current service center"
+        );
+      }
 
       if (!vin) {
         throw new Error("Vehicle VIN is missing for the reservation");
@@ -211,50 +254,21 @@ class ComponentReservationService {
       const typeComponentId = component.typeComponentId;
       const now = formatUTCtzHCM(dayjs());
 
-      const warrantyCount =
-        await this.#vehicleProcessingRecordRepository.countWarrantyByTypeComponent(
-          { typeComponentId, vin },
-          transaction
+      let updatedReservation;
+      const componentInVehicle =
+        await this.#componentRepository.findComponentInVehicleProcessingByTypeAndVin(
+          {
+            typeComponentId,
+            vehicleVin: vin,
+          },
+          transaction,
+          Transaction.LOCK.UPDATE
         );
 
-      let updatedReservation;
+      let oldComponentSerial = null;
 
-      if (warrantyCount > 0) {
-        const componentInVehicle =
-          await this.#componentRepository.findComponentInVehicleProcessingByTypeAndVin(
-            {
-              typeComponentId,
-              vehicleVin: vin,
-            },
-            transaction,
-            Transaction.LOCK.UPDATE
-          );
-
-        if (!componentInVehicle) {
-          throw new Error("Old component not found in vehicle");
-        }
-
-        if (componentInVehicle.status !== "INSTALLED") {
-          throw new Error("Component must be installed before return");
-        }
-
-        const oldComponentSerial = componentInVehicle.serialNumber;
-
-        const installedComponent =
-          await this.#componentRepository.updateInstalledComponentStatus(
-            {
-              vehicleVin: vin,
-              componentId: componentId,
-              installedAt: now,
-              status: "INSTALLED",
-              currentHolderId: null,
-            },
-            transaction
-          );
-
-        if (!installedComponent) {
-          throw new Error("Failed to update component status to INSTALLED");
-        }
+      if (componentInVehicle && componentInVehicle.status === "INSTALLED") {
+        oldComponentSerial = componentInVehicle.serialNumber;
 
         const removedComponent =
           await this.#componentRepository.updateRemovedComponentStatus(
@@ -271,44 +285,39 @@ class ComponentReservationService {
         if (!removedComponent) {
           throw new Error("Failed to flag old component as removed");
         }
-
-        updatedReservation =
-          await this.#componentReservationRepository.updateReservationStatusInstall(
-            {
-              reservationId,
-              installedAt: now,
-              oldComponentSerial,
-              status: "INSTALLED",
-            },
-            transaction
-          );
-      } else {
-        const installedComponent =
-          await this.#componentRepository.updateInstalledComponentStatus(
-            {
-              vehicleVin: vin,
-              componentId: componentId,
-              installedAt: now,
-              status: "INSTALLED",
-              currentHolderId: null,
-            },
-            transaction
-          );
-
-        if (!installedComponent) {
-          throw new Error("Failed to update component status to INSTALLED");
-        }
-
-        updatedReservation =
-          await this.#componentReservationRepository.updateReservationStatusInstall(
-            {
-              reservationId,
-              installedAt: now,
-              status: "INSTALLED",
-            },
-            transaction
-          );
+      } else if (
+        componentInVehicle &&
+        componentInVehicle.status !== "INSTALLED"
+      ) {
+        throw new Error("Existing component must be in INSTALLED status");
       }
+
+      const installedComponent =
+        await this.#componentRepository.updateInstalledComponentStatus(
+          {
+            vehicleVin: vin,
+            componentId: componentId,
+            installedAt: now,
+            status: "INSTALLED",
+            currentHolderId: null,
+          },
+          transaction
+        );
+
+      if (!installedComponent) {
+        throw new Error("Failed to update component status to INSTALLED");
+      }
+
+      updatedReservation =
+        await this.#componentReservationRepository.updateReservationStatusInstall(
+          {
+            reservationId,
+            installedAt: now,
+            oldComponentSerial,
+            status: "INSTALLED",
+          },
+          transaction
+        );
 
       if (!updatedReservation) {
         throw new Error("Failed to update reservation status to INSTALLED");
