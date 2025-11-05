@@ -15,6 +15,32 @@ class AuthController {
       },
     });
   };
+
+  register = async (req, res, next) => {
+    const {
+      username,
+      password,
+      email,
+      phone,
+      address,
+      name,
+      roleId,
+      serviceCenterId,
+      vehicleCompanyId,
+    } = req.body;
+
+    const newUser = await authService.register({
+      username,
+      password,
+      email,
+      phone,
+      address,
+      name,
+      roleId,
+      serviceCenterId,
+      vehicleCompanyId,
+    });
+  };
 }
 
 export default AuthController;

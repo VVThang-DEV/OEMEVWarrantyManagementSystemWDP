@@ -13,6 +13,7 @@ class StockTransferRequestService {
   #componentRepository;
   #typeComponentRepository;
   #notificationService;
+  #inventoryService;
 
   constructor({
     stockTransferRequestRepository,
@@ -23,6 +24,7 @@ class StockTransferRequestService {
     componentRepository,
     typeComponentRepository,
     notificationService,
+    inventoryService,
   }) {
     this.#stockTransferRequestRepository = stockTransferRequestRepository;
     this.#stockTransferRequestItemRepository =
@@ -33,6 +35,7 @@ class StockTransferRequestService {
     this.#componentRepository = componentRepository;
     this.#typeComponentRepository = typeComponentRepository;
     this.#notificationService = notificationService;
+    this.#inventoryService = inventoryService;
   }
 
   createStockTransferRequest = async ({
@@ -291,17 +294,31 @@ class StockTransferRequestService {
           transaction
         );
 
-      const roomName = `parts_coordinator_company_${companyId}`;
-      const eventName = "stock_transfer_request_approved";
-      const data = { requestWithDetails };
-
-      this.#notificationService.sendToRoom(roomName, eventName, data);
-
       return {
         stockReservations: stockReservationsToCreate,
+        stockUpdates,
         updatedStockTransferRequest,
+        requestWithDetails,
       };
     });
+
+    const { requestWithDetails, stockUpdates = [] } = rawResult;
+
+    const roomName = `parts_coordinator_company_${companyId}`;
+    const eventName = "stock_transfer_request_approved";
+    const data = requestWithDetails;
+
+    this.#notificationService.sendToRoom(roomName, eventName, data);
+
+    const affectedStockIds = stockUpdates
+      .map((update) => update.stockId)
+      .filter(Boolean);
+
+    if (affectedStockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: affectedStockIds,
+      });
+    }
 
     return rawResult;
   };
@@ -309,14 +326,14 @@ class StockTransferRequestService {
   shipStockTransferRequest = async ({
     requestId,
     roleName,
-    serviceCenterId,
     estimatedDeliveryDate,
     companyId,
   }) => {
+    let serviceCenterRequest;
     const rawResult = await db.sequelize.transaction(async (transaction) => {
       const existingRequest =
         await this.#stockTransferRequestRepository.getStockTransferRequestById(
-          { id: requestId },
+          { id: requestId, roleName: roleName, companyId: companyId },
           transaction,
           Transaction.LOCK.UPDATE
         );
@@ -333,9 +350,11 @@ class StockTransferRequestService {
         );
       }
 
+      serviceCenterRequest = existingRequest?.requester?.serviceCenterId;
+
       const reservations =
         await this.#stockReservationRepository.findByRequestId(
-          { requestId },
+          { requestId, status: "RESERVED" },
           transaction,
           Transaction.LOCK.UPDATE
         );
@@ -408,7 +427,7 @@ class StockTransferRequestService {
         transaction
       );
 
-  const reservationIds = reservations.map((r) => r.reservationId);
+      const reservationIds = reservations.map((r) => r.reservationId);
       await this.#stockReservationRepository.bulkUpdateStatus(
         { reservationIds, status: "SHIPPED" },
         transaction
@@ -428,12 +447,13 @@ class StockTransferRequestService {
       return {
         updatedRequest,
         componentCollections,
+        stockUpdates,
       };
     });
 
-    const roomNameServiceCenterStaff = `service_center_staff_${serviceCenterId}`;
-    const roomNameServiceCenterManager = `service_center_manager_${serviceCenterId}`;
-    const roomNamePartsCoordinatorServiceCenter = `parts_coordinator_service_center_${serviceCenterId}`;
+    const roomNameServiceCenterStaff = `service_center_staff_${serviceCenterRequest}`;
+    const roomNameServiceCenterManager = `service_center_manager_${serviceCenterRequest}`;
+    const roomNamePartsCoordinatorServiceCenter = `parts_coordinator_service_center_${serviceCenterRequest}`;
 
     const eventName = "stock_transfer_request_shipped";
     const data = { requestId };
@@ -448,7 +468,21 @@ class StockTransferRequestService {
       data
     );
 
-    const { updatedRequest, componentCollections } = rawResult;
+    const {
+      updatedRequest,
+      componentCollections,
+      stockUpdates = [],
+    } = rawResult;
+
+    const affectedStockIds = stockUpdates
+      .map((update) => update.stockId)
+      .filter(Boolean);
+
+    if (affectedStockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: affectedStockIds,
+      });
+    }
 
     return {
       updatedRequest,
@@ -533,6 +567,7 @@ class StockTransferRequestService {
       );
 
       const stockUpdates = [];
+      const createdStockIds = [];
       for (const [typeComponentId, components] of Object.entries(
         componentsByType
       )) {
@@ -553,7 +588,7 @@ class StockTransferRequestService {
             quantityReserved: 0,
           });
         } else {
-          await this.#warehouseRepository.createStock(
+          const createdStock = await this.#warehouseRepository.createStock(
             {
               warehouseId: warehouseId,
               typeComponentId: typeComponentId,
@@ -562,6 +597,10 @@ class StockTransferRequestService {
             },
             transaction
           );
+
+          if (createdStock?.stockId) {
+            createdStockIds.push(createdStock.stockId);
+          }
         }
       }
 
@@ -623,10 +662,33 @@ class StockTransferRequestService {
       return {
         updatedRequest,
         receivedComponentsCount: allComponentIds.length,
+        stockUpdates,
+        createdStockIds,
       };
     });
 
-    return rawResult;
+    const {
+      updatedRequest,
+      receivedComponentsCount,
+      stockUpdates = [],
+      createdStockIds = [],
+    } = rawResult;
+
+    const emittedStockIds = new Set([
+      ...stockUpdates.map((update) => update.stockId).filter(Boolean),
+      ...createdStockIds.filter(Boolean),
+    ]);
+
+    if (emittedStockIds.size > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: Array.from(emittedStockIds),
+      });
+    }
+
+    return {
+      updatedRequest,
+      receivedComponentsCount,
+    };
   };
 
   rejectStockTransferRequest = async ({
@@ -728,6 +790,8 @@ class StockTransferRequestService {
         }
       }
 
+      let releasedStockIds = [];
+
       if (roleName === "emv_staff") {
         if (
           !["PENDING_APPROVAL", "APPROVED"].includes(existingRequest.status)
@@ -764,6 +828,10 @@ class StockTransferRequestService {
               { reservationIds, status: "CANCELLED" },
               transaction
             );
+
+            releasedStockIds = stockUpdates
+              .map((update) => update.stockId)
+              .filter(Boolean);
           }
         }
       }
@@ -778,10 +846,10 @@ class StockTransferRequestService {
           transaction
         );
 
-      return updatedRequest;
+      return { updatedRequest, releasedStockIds };
     });
 
-    const { updatedRequest } = rawResult;
+    const { updatedRequest, releasedStockIds = [] } = rawResult;
 
     const roomName = `emv_staff_${companyId}`;
 
@@ -789,6 +857,12 @@ class StockTransferRequestService {
     const data = { updatedRequest };
 
     this.#notificationService.sendToRooms([roomName], eventName, data);
+
+    if (releasedStockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: Array.from(new Set(releasedStockIds)),
+      });
+    }
 
     return rawResult;
   };

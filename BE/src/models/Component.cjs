@@ -30,15 +30,15 @@ module.exports = (sequelize, DataTypes) => {
 
       status: {
         type: DataTypes.ENUM(
-          "IN_WAREHOUSE",
+          "IN_STOCK",
           "RESERVED",
           "IN_TRANSIT",
-          "WITH_TECHNICIAN",
+          "PICKED_UP",
           "INSTALLED",
-          "RETURNED"
+          "REMOVED"
         ),
         allowNull: false,
-        defaultValue: "IN_WAREHOUSE",
+        defaultValue: "IN_STOCK",
         field: "status",
       },
 

@@ -38,6 +38,42 @@ class AuthService {
 
     return token;
   };
+
+  register = async ({
+    username,
+    password,
+    email,
+    phone,
+    address,
+    name,
+    roleId,
+    serviceCenterId,
+    vehicleCompanyId,
+  }) => {
+    const existingUser = await this.#userRepository.findByUsername({
+      username: username,
+    });
+
+    if (existingUser) {
+      throw new Error("Username already exists");
+    }
+
+    const hashedPassword = await this.#tokenService.hash({ string: password });
+
+    const newUser = await this.#userRepository.createUser({
+      username,
+      password: hashedPassword,
+      email,
+      phone,
+      address,
+      name,
+      roleId,
+      serviceCenterId,
+      vehicleCompanyId,
+    });
+
+    return newUser.toJSON();
+  };
 }
 
 export default AuthService;

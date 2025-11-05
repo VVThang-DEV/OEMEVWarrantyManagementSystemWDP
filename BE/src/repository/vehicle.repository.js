@@ -1,5 +1,13 @@
+import { where } from "sequelize";
 import db from "../models/index.cjs";
-const { Vehicle, Customer, VehicleModel, VehicleCompany, TypeComponent } = db;
+const {
+  Vehicle,
+  Customer,
+  VehicleModel,
+  VehicleCompany,
+  TypeComponent,
+  Component,
+} = db;
 
 class VehicleRepository {
   findByVinAndCompany = async (
@@ -146,6 +154,43 @@ class VehicleRepository {
     }
 
     return true;
+  };
+
+  findWarrantedComponentsByVehicleVin = async ({ vin }, option = null) => {
+    const vehicle = await Vehicle.findOne({
+      where: {
+        vin: vin,
+      },
+      attributes: ["vin"],
+      include: [
+        {
+          model: Component,
+          as: "components",
+          attributes: ["componentId", "serialNumber", "status", "installedAt"],
+          where: { status: "INSTALLED" },
+          required: false,
+          include: [
+            {
+              model: TypeComponent,
+              as: "typeComponent",
+              attributes: [
+                "typeComponentId",
+                "name",
+                "sku",
+                "category",
+                "price",
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!vehicle) {
+      return null;
+    }
+
+    return vehicle.toJSON();
   };
 }
 

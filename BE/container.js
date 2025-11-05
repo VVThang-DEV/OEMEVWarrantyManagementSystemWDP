@@ -9,6 +9,7 @@ import WorkScheduleController from "./src/api/controller/workSchedule.controller
 import StockTransferRequestController from "./src/api/controller/stockTransferRequest.controller.js";
 import MailController from "./src/api/controller/mail.controller.js";
 import InventoryController from "./src/api/controller/inventory.controller.js";
+import TaskAssignmentController from "./src/api/controller/taskAssignment.controller.js";
 
 import AuthService from "./src/service/auth.service.js";
 import HashService from "./src/service/hash.service.js";
@@ -23,6 +24,7 @@ import WorkScheduleService from "./src/service/workSchedule.service.js";
 import StockTransferRequestService from "./src/service/stockTransferRequest.service.js";
 import MailService from "./src/service/mail.service.js";
 import InventoryService from "./src/service/inventory.service.js";
+import TaskAssignmentService from "./src/service/taskAssignment.service.js";
 
 import UserRepository from "./src/repository/user.repository.js";
 import VehicleRepository from "./src/repository/vehicle.repository.js";
@@ -40,6 +42,7 @@ import StockTransferRequestRepository from "./src/repository/stockTransferReques
 import StockTransferRequestItemRepository from "./src/repository/stockTransferRequestItem.repository.js";
 import StockReservationRepository from "./src/repository/stockReservation.repository.js";
 import InventoryRepository from "./src/repository/inventory.repository.js";
+import InventoryAdjustmentRepository from "./src/repository/inventoryAdjustment.repository.js";
 
 import TaskAssignmentRepository from "./src/repository/taskAssignment.repository.js";
 import UserController from "./src/api/controller/user.controller.js";
@@ -106,6 +109,9 @@ export function setupContainer({ io, notificationNamespace, chatNamespace }) {
     inventoryController: asClass(InventoryController, {
       lifetime: Lifetime.SCOPED,
     }),
+    taskAssignmentController: asClass(TaskAssignmentController, {
+      lifetime: Lifetime.SCOPED,
+    }),
 
     // Services
     authService: asClass(AuthService, { lifetime: Lifetime.SCOPED }),
@@ -137,6 +143,9 @@ export function setupContainer({ io, notificationNamespace, chatNamespace }) {
       lifetime: Lifetime.SCOPED,
     }),
     inventoryService: asClass(InventoryService, { lifetime: Lifetime.SCOPED }),
+    taskAssignmentService: asClass(TaskAssignmentService, {
+      lifetime: Lifetime.SCOPED,
+    }),
 
     // Repositories
     userRepository: asClass(UserRepository, { lifetime: Lifetime.SCOPED }),
@@ -196,6 +205,9 @@ export function setupContainer({ io, notificationNamespace, chatNamespace }) {
       lifetime: Lifetime.SCOPED,
     }),
     inventoryRepository: asClass(InventoryRepository, {
+      lifetime: Lifetime.SCOPED,
+    }),
+    inventoryAdjustmentRepository: asClass(InventoryAdjustmentRepository, {
       lifetime: Lifetime.SCOPED,
     }),
     workScheduleRepository: asClass(WorkScheduleRepository, {

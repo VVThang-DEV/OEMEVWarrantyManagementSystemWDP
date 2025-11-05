@@ -14,6 +14,8 @@ export const createCaseLinesSchema = Joi.object({
   caselines: Joi.array().items(caseLineSchema).min(1).required(),
 });
 
+const optionalCaseId = Joi.string().uuid({ version: "uuidv4" }).optional();
+
 const approveCaseline = Joi.object({
   id: Joi.string().uuid({ version: "uuidv4" }).required(),
 });
@@ -25,12 +27,12 @@ export const approveCaselineBodySchema = Joi.object({
 });
 
 export const allocateStockParamsSchema = Joi.object({
-  caseId: Joi.string().uuid({ version: "uuidv4" }).required(),
+  caseId: optionalCaseId,
   caselineId: Joi.string().uuid({ version: "uuidv4" }).required(),
 });
 
 export const assignTechnicianParamsSchema = Joi.object({
-  caseId: Joi.string().uuid({ version: "uuidv4" }).required(),
+  caseId: optionalCaseId,
   caselineId: Joi.string().uuid({ version: "uuidv4" }).required(),
 });
 
@@ -39,7 +41,7 @@ export const assignTechnicianBodySchema = Joi.object({
 });
 
 export const updateCaselineParamsSchema = Joi.object({
-  caseId: Joi.string().uuid({ version: "uuidv4" }).required(),
+  caseId: optionalCaseId,
   caselineId: Joi.string().uuid({ version: "uuidv4" }).required(),
 });
 
@@ -54,7 +56,6 @@ export const updateCaselineBodySchema = Joi.object({
 });
 
 export const getCaseLineByIdParamsSchema = Joi.object({
-  caseId: Joi.string().uuid({ version: "uuidv4" }).required(),
   caselineId: Joi.string().uuid({ version: "uuidv4" }).required(),
 });
 
@@ -62,12 +63,10 @@ export const pickupComponentsParamsSchema = Joi.object({
   caselineId: Joi.string().uuid().required(),
 });
 
-// Validator for install components
 export const installComponentsParamsSchema = Joi.object({
   caselineId: Joi.string().uuid().required(),
 });
 
-// Validator for get caseline by ID
 export const getCaselineByIdParamsSchema = Joi.object({
   caselineId: Joi.string().uuid().required(),
 });
@@ -101,4 +100,9 @@ export const getAllCaselinesQuerySchema = Joi.object({
     .valid("createdAt", "updatedAt", "status")
     .default("createdAt"),
   sortOrder: Joi.string().valid("ASC", "DESC").default("DESC"),
+});
+
+export const validateOldComponentSerialSchema = Joi.object({
+  caseLineId: Joi.string().uuid({ version: "uuidv4" }).required(),
+  oldComponentSerialNumber: Joi.string().required(),
 });
