@@ -494,6 +494,43 @@ class VehicleProcessingRecordRepository {
 
     return records.map((r) => r.toJSON());
   };
+
+  countWarrantyByTypeComponent = async (
+    { typeComponentId, vin },
+    transaction = null,
+    lock = null
+  ) => {
+    const count = await VehicleProcessingRecord.count({
+      include: [
+        {
+          model: GuaranteeCase,
+          as: "guaranteeCases",
+          attributes: [],
+          required: true,
+          include: [
+            {
+              model: CaseLine,
+              as: "caseLines",
+              attributes: [],
+              where: {
+                typeComponentId,
+                warrantyStatus: "ELIGIBLE",
+                status: "COMPLETED",
+              },
+              required: true,
+            },
+          ],
+        },
+      ],
+      where: {
+        vin,
+      },
+      transaction,
+      lock,
+    });
+
+    return count;
+  };
 }
 
 export default VehicleProcessingRecordRepository;

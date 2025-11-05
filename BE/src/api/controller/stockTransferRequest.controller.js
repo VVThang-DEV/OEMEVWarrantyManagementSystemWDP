@@ -101,7 +101,7 @@ class StockTransferRequestController {
   shipStockTransferRequest = async (req, res, next) => {
     const { id } = req.params;
 
-    const { roleName, serviceCenterId } = req.user;
+    const { roleName } = req.user;
 
     const { companyId } = req;
 
@@ -111,7 +111,6 @@ class StockTransferRequestController {
       await this.#stockTransferRequestService.shipStockTransferRequest({
         requestId: id,
         roleName,
-        serviceCenterId,
         estimatedDeliveryDate,
         companyId,
       });

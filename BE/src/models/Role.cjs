@@ -22,6 +22,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         field: "role_name",
       },
+      maxTasks: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 10,
+        field: "max_tasks",
+      },
     },
     {
       tableName: "role",

@@ -242,6 +242,21 @@ class VehicleService {
     return vehicleWithWarranty;
   };
 
+  getWarrantedComponentsForVehicle = async ({ vin }) => {
+    const vehicle =
+      await this.#vehicleRepository.findWarrantedComponentsByVehicleVin({
+        vin,
+      });
+
+    if (!vehicle) {
+      throw new NotFoundError("Vehicle not found");
+    }
+
+    const warrantedComponents = vehicle.components || [];
+
+    return warrantedComponents;
+  };
+
   #validateVehicleDatesWithDayjs(purchaseDateStr, dateOfManufactureStr) {
     const purchaseDate = dayjs(purchaseDateStr);
     const dateOfManufacture = dayjs(dateOfManufactureStr);

@@ -65,21 +65,34 @@ class ComponentReservationRepository {
   };
 
   updateReservationStatusInstall = async (
-    { reservationId, installedAt, status = "INSTALLED" },
+    {
+      reservationId,
+      installedAt,
+      oldComponentSerial,
+      status = "INSTALLED",
+      oldComponentReturned,
+    },
     transaction = null
   ) => {
-    const [affectedRows] = await ComponentReservation.update(
-      {
-        status: status,
-        installedAt: installedAt,
+    const updateData = {
+      status: status,
+      installedAt: installedAt,
+    };
+
+    if (oldComponentSerial !== undefined) {
+      updateData.oldComponentSerial = oldComponentSerial;
+    }
+
+    if (oldComponentReturned !== undefined) {
+      updateData.oldComponentReturned = oldComponentReturned;
+    }
+
+    const [affectedRows] = await ComponentReservation.update(updateData, {
+      where: {
+        reservationId: reservationId,
       },
-      {
-        where: {
-          reservationId: reservationId,
-        },
-        transaction: transaction,
-      }
-    );
+      transaction: transaction,
+    });
 
     if (affectedRows === 0) {
       return null;

@@ -50,7 +50,7 @@ module.exports = (sequelize, DataTypes) => {
 
       makeBrand: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: false,
         field: "make_brand",
       },
     },

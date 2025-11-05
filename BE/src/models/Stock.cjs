@@ -1,3 +1,5 @@
+const { default: dayjs } = require("dayjs");
+
 module.exports = (sequelize, DataTypes) => {
   const Stock = sequelize.define(
     "Stock",
@@ -40,6 +42,19 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         field: "type_component_id",
       },
+
+      reorderPoint: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        field: "reorder_point",
+      },
+
+      lowStockNotifiedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: "low_stock_notified_at",
+      },
     },
     {
       tableName: "stock",
@@ -50,6 +65,39 @@ module.exports = (sequelize, DataTypes) => {
           name: "unique_stock_item_location",
         },
       ],
+
+      hooks: {
+        afterUpdate: async (stock, options) => {
+          const cooldownHours = 2;
+          const hoursSinceLastAlert = stock.lowStockNotifiedAt
+            ? dayjs().diff(dayjs(stock.lowStockNotifiedAt), "hour", true)
+            : Infinity;
+
+          if (
+            stock.quantityAvailable <= stock.reorderPoint &&
+            hoursSinceLastAlert >= cooldownHours
+          ) {
+            await stock.update(
+              {
+                lowStockNotifiedAt: dayjs().toDate(),
+              },
+              { transaction: options.transaction, hooks: false }
+            );
+          }
+
+          if (
+            stock.quantityAvailable > stock.reorderPoint &&
+            stock.lowStockNotifiedAt
+          ) {
+            await stock.update(
+              {
+                lowStockNotifiedAt: null,
+              },
+              { transaction: options.transaction, hooks: false }
+            );
+          }
+        },
+      },
     }
   );
 

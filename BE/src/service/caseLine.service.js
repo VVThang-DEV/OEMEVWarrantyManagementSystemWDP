@@ -20,6 +20,7 @@ class CaseLineService {
   #warehouseService;
   #vehicleProcessingRecordRepository;
   #notificationService;
+  #inventoryService;
 
   constructor({
     caselineRepository,
@@ -32,6 +33,7 @@ class CaseLineService {
     warehouseService,
     vehicleProcessingRecordRepository,
     notificationService,
+    inventoryService,
   }) {
     this.#caselineRepository = caselineRepository;
     this.#componentReservationRepository = componentReservationRepository;
@@ -43,6 +45,7 @@ class CaseLineService {
     this.#warehouseService = warehouseService;
     this.#vehicleProcessingRecordRepository = vehicleProcessingRecordRepository;
     this.#notificationService = notificationService;
+    this.#inventoryService = inventoryService;
   }
 
   createCaseLines = async ({
@@ -54,11 +57,12 @@ class CaseLineService {
     companyId,
   }) => {
     const rawResult = await db.sequelize.transaction(async (transaction) => {
-      const guaranteeCase = await this.#validateGuaranteeCaseForCaseLines(
-        guaranteeCaseId,
-        transaction,
-        techId
-      );
+      const guaranteeCase =
+        await this.#validateInputGuaranteeCaseAndTechnicianForCaseLines(
+          guaranteeCaseId,
+          transaction,
+          techId
+        );
 
       const typeComponents =
         await this.#warehouseService.searchCompatibleComponentsInStock({
@@ -70,11 +74,8 @@ class CaseLineService {
           companyId: companyId,
         });
 
-      const typeComponentsMap = new Map(
-        typeComponents
-          .filter((c) => c?.typeComponentId)
-          .map((c) => [c.typeComponentId, Boolean(c.isUnderWarranty)])
-      );
+      const typeComponentsMap =
+        this.#buildTypeComponentWarrantyMap(typeComponents);
 
       const normalizedCaselines = caselines.map((caseline) => ({
         ...caseline,
@@ -92,7 +93,7 @@ class CaseLineService {
 
       for (const caseline of processedCaselines) {
         if (
-          caseline.warrantyStatus === "REJECTED_BY_TECH" &&
+          caseline.status === "REJECTED_BY_TECH" &&
           !caseline.rejectionReason
         ) {
           throw new ConflictError(
@@ -133,6 +134,7 @@ class CaseLineService {
     techId,
     companyId,
     evidenceImageUrls,
+    rejectionReason,
   }) => {
     const rawResult = await db.sequelize.transaction(async (transaction) => {
       const guaranteeCase = await this.#guaranteeCaseRepository.findDetailById(
@@ -164,41 +166,51 @@ class CaseLineService {
           companyId: companyId,
         });
 
-      const typeComponentsMap = new Map(
-        typeComponents
-          .filter((c) => c?.typeComponentId)
-          .map((c) => [c.typeComponentId, Boolean(c.isUnderWarranty)])
-      );
-
-      if (typeComponentId && typeComponentsMap.has(typeComponentId)) {
-        const isUnderWarrantyByTech =
-          warrantyStatus === "ELIGIBLE" ? true : false;
-
-        const isUnderWarrantyBySystem = typeComponentsMap.get(typeComponentId);
-
-        if (!isUnderWarrantyBySystem && isUnderWarrantyByTech) {
-          throw new ConflictError(
-            "Component is marked as under warranty by technician but is out of warranty in system"
-          );
-        }
-      }
-
-      const initialStatus = "DRAFT";
+      const typeComponentsMap =
+        this.#buildTypeComponentWarrantyMap(typeComponents);
 
       const normalizedImageUrls =
         this.#normalizeEvidenceImageUrls(evidenceImageUrls);
 
+      const inputCaseline = {
+        typeComponentId,
+        quantity,
+        diagnosisText,
+        correctionText,
+        warrantyStatus,
+        rejectionReason:
+          typeof rejectionReason === "string" ? rejectionReason : null,
+        evidenceImageUrls: normalizedImageUrls,
+      };
+
+      this.#validateWarrantyConsistency(typeComponentsMap, [inputCaseline]);
+
+      const [processedCaseline] = this.#assignInitialCaseLineStatuses(
+        typeComponentsMap,
+        [inputCaseline]
+      );
+
+      if (
+        processedCaseline.status === "REJECTED_BY_TECH" &&
+        !processedCaseline.rejectionReason
+      ) {
+        throw new ConflictError(
+          `Technician must provide a rejection reason if caseline with typeComponentId ${processedCaseline.typeComponentId} is marked as REJECTED_BY_TECH`
+        );
+      }
+
       const newCaseLine = await this.#caselineRepository.createCaseLine(
         {
           guaranteeCaseId: guaranteeCaseId,
-          typeComponentId,
-          quantity,
-          diagnosisText,
-          correctionText,
-          status: initialStatus,
-          warrantyStatus,
+          typeComponentId: processedCaseline.typeComponentId,
+          quantity: processedCaseline.quantity,
+          diagnosisText: processedCaseline.diagnosisText,
+          correctionText: processedCaseline.correctionText,
+          status: processedCaseline.status,
+          warrantyStatus: processedCaseline.warrantyStatus,
+          rejectionReason: processedCaseline.rejectionReason,
           diagnosticTechId: techId,
-          evidenceImageUrls: normalizedImageUrls,
+          evidenceImageUrls: processedCaseline.evidenceImageUrls,
         },
         transaction
       );
@@ -214,9 +226,7 @@ class CaseLineService {
   };
 
   getCaseLineById = async (
-    userId,
-    roleName,
-    caselineId,
+    { userId, roleName, caselineId, companyId, serviceCenterId },
     transaction = null,
     lock = null
   ) => {
@@ -230,17 +240,52 @@ class CaseLineService {
       throw new NotFoundError("Case line not found");
     }
 
-    const isDiagnosticTech = caseLine.diagnosticTechnician.userId === userId;
-
-    const repairTech = caseLine.repairTechnician?.repairTechId === userId;
+    const diagnosticTechId = caseLine?.diagnosticTechnician?.userId || null;
+    const repairTechId = caseLine?.repairTechnician?.userId || null;
 
     if (roleName === "service_center_technician") {
-      if (!isDiagnosticTech && !repairTech) {
+      if (diagnosticTechId !== userId && repairTechId !== userId) {
         throw new ForbiddenError(
           "User does not have permission to access this case line"
         );
       }
     }
+
+    const createdByStaff =
+      caseLine.guaranteeCase?.vehicleProcessingRecord?.createdByStaff;
+
+    const recordServiceCenterId = createdByStaff?.serviceCenterId || null;
+    const recordCompanyId =
+      createdByStaff?.vehicleCompanyId ||
+      createdByStaff?.serviceCenter?.vehicleCompanyId ||
+      null;
+
+    const serviceCenterRoles = [
+      "service_center_technician",
+      "service_center_staff",
+      "service_center_manager",
+    ];
+
+    if (serviceCenterRoles.includes(roleName)) {
+      if (!serviceCenterId || !recordServiceCenterId) {
+        throw new ForbiddenError(
+          "Unable to verify service center ownership for this case line"
+        );
+      }
+
+      if (recordServiceCenterId !== serviceCenterId) {
+        throw new ForbiddenError(
+          "User does not have permission to access this case line"
+        );
+      }
+    }
+
+    if (companyId && recordCompanyId && recordCompanyId !== companyId) {
+      throw new ForbiddenError(
+        "User does not have permission to access this case line"
+      );
+    }
+
     return caseLine;
   };
 
@@ -289,25 +334,34 @@ class CaseLineService {
         transaction
       );
 
-      const guaranteeCase = await this.#guaranteeCaseRepository.findDetailById(
-        { guaranteeCaseId: caseId },
-        transaction
-      );
-
-      if (!guaranteeCase) {
-        throw new NotFoundError("Guarantee case not found");
-      }
-
       const guaranteeCaseIdFromCaseline =
         caseline.guaranteeCase?.guaranteeCaseId || caseline.guaranteeCaseId;
 
       if (
+        caseId &&
         guaranteeCaseIdFromCaseline &&
         guaranteeCaseIdFromCaseline !== caseId
       ) {
         throw new ConflictError(
           "Caseline does not belong to the provided guarantee case"
         );
+      }
+
+      const resolvedGuaranteeCaseId = caseId || guaranteeCaseIdFromCaseline;
+
+      if (!resolvedGuaranteeCaseId) {
+        throw new NotFoundError(
+          "Associated guarantee case not found for the caseline"
+        );
+      }
+
+      const guaranteeCase = await this.#guaranteeCaseRepository.findDetailById(
+        { guaranteeCaseId: resolvedGuaranteeCaseId },
+        transaction
+      );
+
+      if (!guaranteeCase) {
+        throw new NotFoundError("Guarantee case not found");
       }
 
       const serviceCenter =
@@ -428,6 +482,12 @@ class CaseLineService {
       componentStatusUpdates,
       caselineStatusUpdate,
     } = rawResult;
+
+    const stockIds = (stockUpdates || []).map((stock) => stock.stockId);
+
+    if (stockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({ stockIds });
+    }
 
     const formattedCaselineStatus = caselineStatusUpdate.map((cl) => ({
       caselineId: cl.id,
@@ -649,19 +709,17 @@ class CaseLineService {
             companyId: companyId,
           });
 
-        const typeComponentsMap = new Map(
-          typeComponents
-            .filter((c) => c?.typeComponentId)
-            .map((c) => [c.typeComponentId, Boolean(c.isUnderWarranty)])
-        );
+        const typeComponentsMap =
+          this.#buildTypeComponentWarrantyMap(typeComponents);
 
         if (typeComponentId) {
-          if (typeComponentsMap.has(typeComponentId)) {
+          const normalizedId = String(typeComponentId).toLowerCase();
+
+          if (typeComponentsMap.has(normalizedId)) {
             const isUnderWarrantyByTech =
               warrantyStatus === "ELIGIBLE" ? true : false;
 
-            const isUnderWarrantyBySystem =
-              typeComponentsMap.get(typeComponentId);
+            const isUnderWarrantyBySystem = typeComponentsMap.get(normalizedId);
 
             if (!isUnderWarrantyBySystem && isUnderWarrantyByTech) {
               throw new ConflictError(
@@ -778,6 +836,18 @@ class CaseLineService {
         );
       }
 
+      const activeTaskCount =
+        await this.#taskAssignmentRepository.countActiveTasksByTechnician(
+          technicianId,
+          transaction
+        );
+
+      if (activeTaskCount >= technician.role.maxTasks) {
+        throw new ConflictError(
+          `Technician has reached the maximum limit of ${technician.role.maxTasks} active tasks.`
+        );
+      }
+
       const [taskAssignment, updatedCaseline] = await Promise.all([
         this.#taskAssignmentRepository.createTaskAssignmentForCaseline(
           {
@@ -805,7 +875,7 @@ class CaseLineService {
         );
       }
 
-      const roomName = `service_center_technician_${technicianId}`;
+      const roomName = `user_${technicianId}`;
       const eventName = "newRepairTaskAssigned";
       const data = {
         taskAssignment,
@@ -908,19 +978,10 @@ class CaseLineService {
             );
           }
 
-          const hasOldComponent = !!reservation.oldComponentSerial;
-
-          const isReservationComplete = hasOldComponent
-            ? reservation.status === "RETURNED" &&
-              reservation.oldComponentReturned &&
-              reservation.returnedAt
-            : reservation.status === "INSTALLED";
-
-          if (!isReservationComplete) {
-            const reason = hasOldComponent
-              ? `Old component ${reservation.oldComponentSerial} must be returned before marking repair as completed`
-              : `Component ${component.serialNumber} must be installed before marking repair as completed`;
-            throw new ConflictError(reason);
+          if (reservation.status !== "INSTALLED") {
+            throw new ConflictError(
+              `Component reservation for ${component.serialNumber} must be in INSTALLED status`
+            );
           }
         }
       }
@@ -968,7 +1029,7 @@ class CaseLineService {
       const allGuaranteeCases = record?.guaranteeCases || [];
 
       const allCaseLinesCompleted = allGuaranteeCases.every((gc) =>
-        gc.caseLines?.every((cl) => cl.status === "COMPLETED")
+        gc.caseLines?.every((cl) => this.#isFinalCaseLineStatus(cl.status))
       );
 
       if (allCaseLinesCompleted) {
@@ -1006,6 +1067,48 @@ class CaseLineService {
     }));
   };
 
+  #buildTypeComponentWarrantyMap = (typeComponents) => {
+    const map = new Map();
+
+    if (!Array.isArray(typeComponents)) {
+      return map;
+    }
+
+    for (const component of typeComponents) {
+      const typeComponentId = component?.typeComponentId;
+
+      if (!typeComponentId) {
+        continue;
+      }
+
+      const normalizedId = String(typeComponentId).toLowerCase();
+      const isUnderWarranty = Boolean(component?.isUnderWarranty);
+
+      if (!map.has(normalizedId)) {
+        map.set(normalizedId, isUnderWarranty);
+        continue;
+      }
+
+      if (isUnderWarranty) {
+        map.set(normalizedId, true);
+      }
+    }
+
+    return map;
+  };
+
+  #isFinalCaseLineStatus = (status) => {
+    const FINAL_STATUSES = new Set([
+      "COMPLETED",
+      "CANCELLED",
+      "REJECTED_BY_OUT_OF_WARRANTY",
+      "REJECTED_BY_TECH",
+      "REJECTED_BY_CUSTOMER",
+    ]);
+
+    return FINAL_STATUSES.has(status);
+  };
+
   #allocateStock = ({ stocks, quantity }) => {
     // const singleStockSource = stocks.find(
     //   (stock) => stock.quantityAvailable >= quantity
@@ -1041,7 +1144,7 @@ class CaseLineService {
     return reservations;
   };
 
-  #validateGuaranteeCaseForCaseLines = async (
+  #validateInputGuaranteeCaseAndTechnicianForCaseLines = async (
     guaranteeCaseId,
     transaction,
     techId
@@ -1078,13 +1181,13 @@ class CaseLineService {
     for (const caseline of caselines) {
       if (!caseline?.typeComponentId) continue;
 
-      if (typeComponentsMap.has(caseline.typeComponentId)) {
+      const normalizedId = String(caseline.typeComponentId).toLowerCase();
+
+      if (typeComponentsMap.has(normalizedId)) {
         const isUnderWarrantyByTech =
           caseline.warrantyStatus === "ELIGIBLE" ? true : false;
 
-        const isUnderWarrantyBySystem = typeComponentsMap.get(
-          caseline.typeComponentId
-        );
+        const isUnderWarrantyBySystem = typeComponentsMap.get(normalizedId);
 
         if (!isUnderWarrantyBySystem && isUnderWarrantyByTech) {
           throw new ConflictError(
@@ -1103,9 +1206,13 @@ class CaseLineService {
 
       const warrantyStatusByTech = newCaseline.warrantyStatus;
 
-      const systemWarrantyStatus = typeComponentsMap.get(
-        newCaseline.typeComponentId
-      );
+      const normalizedId = newCaseline.typeComponentId
+        ? String(newCaseline.typeComponentId).toLowerCase()
+        : null;
+
+      const systemWarrantyStatus = normalizedId
+        ? typeComponentsMap.get(normalizedId)
+        : undefined;
 
       let initialStatus;
 
@@ -1215,8 +1322,8 @@ class CaseLineService {
 
       if (components.length < reservation.quantityReserved) {
         throw new ConflictError(
-          `Insufficient available components in warehouse ${stock.warehouseId}. ` +
-            `Requested: ${reservation.quantity}, Available: ${components.length}`
+          `Insufficient available components in warehouse ${stock.warehouse?.warehouseId}. ` +
+            `Requested: ${reservation.quantityReserved}, Available: ${components.length}`
         );
       }
 

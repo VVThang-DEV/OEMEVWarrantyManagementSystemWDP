@@ -95,8 +95,6 @@ class UserRepository {
         {
           model: Role,
           as: "role",
-
-          attributes: ["roleName"],
         },
         {
           model: ServiceCenter,
@@ -124,6 +122,53 @@ class UserRepository {
 
     return user.toJSON();
   }
+
+  findByPhone = async ({ phone }, transaction = null, lock = null) => {
+    const user = await User.findOne({
+      where: {
+        phone: phone,
+      },
+
+      include: [
+        {
+          model: Role,
+          as: "role",
+          attributes: ["roleName"],
+        },
+      ],
+
+      transaction,
+      lock,
+    });
+
+    return user ? user.toJSON() : null;
+  };
+
+  createUser = async ({
+    username,
+    password: hashedPassword,
+    email,
+    phone,
+    address,
+    name,
+    roleId,
+    serviceCenterId,
+    vehicleCompanyId,
+  }) => {
+    const newUser = await User.create({
+      username,
+      password,
+      email,
+      phone,
+      address,
+      name,
+      roleId,
+      serviceCenterId,
+      vehicleCompanyId,
+    });
+
+    return newUser.toJSON();
+  };
 }
 
 export default UserRepository;

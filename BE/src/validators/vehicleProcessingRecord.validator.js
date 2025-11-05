@@ -27,3 +27,7 @@ export const updateMainTechnicianBodySchema = Joi.object({
 export const updateMainTechnicianParamsSchema = Joi.object({
   id: Joi.string().required().uuid({ version: "uuidv4" }),
 });
+
+export const getWarrantedComponentsForVehicleSchema = Joi.object({
+  recordId: Joi.string().required().uuid({ version: "uuidv4" }),
+});

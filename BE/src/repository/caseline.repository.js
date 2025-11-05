@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { col, fn, Op, literal } from "sequelize";
 import db from "../models/index.cjs";
 
 const {
@@ -9,6 +9,7 @@ const {
   ComponentReservation,
   Component,
   VehicleProcessingRecord,
+  ServiceCenter,
 } = db;
 
 class CaseLineRepository {
@@ -124,6 +125,22 @@ class CaseLineRepository {
               as: "vehicleProcessingRecord",
               attributes: ["vehicleProcessingRecordId", "vin"],
               required: true,
+              include: [
+                {
+                  model: User,
+                  as: "createdByStaff",
+                  attributes: ["userId", "serviceCenterId", "vehicleCompanyId"],
+                  required: false,
+                  include: [
+                    {
+                      model: ServiceCenter,
+                      as: "serviceCenter",
+                      attributes: ["serviceCenterId", "vehicleCompanyId"],
+                      required: false,
+                    },
+                  ],
+                },
+              ],
             },
           ],
         },
@@ -276,8 +293,16 @@ class CaseLineRepository {
             {
               model: VehicleProcessingRecord,
               as: "vehicleProcessingRecord",
-              attributes: ["vin"],
+              attributes: ["vehicleProcessingRecordId", "vin"],
               required: true,
+              include: [
+                {
+                  model: User,
+                  as: "createdByStaff",
+                  attributes: ["userId", "serviceCenterId"],
+                  required: false,
+                },
+              ],
             },
           ],
         },
@@ -447,6 +472,121 @@ class CaseLineRepository {
 
     return caseLines.map((cl) => cl.id ?? cl.toJSON().id);
   };
-}
 
-export default CaseLineRepository;
+  findTopWarrantyTypeComponents = async (
+    { limit, startDate, endDate, serviceCenterId },
+    transaction = null,
+    lock = null
+  ) => {
+    const whereClause = {};
+
+    if (startDate && endDate) {
+      whereClause.createdAt = {
+        [Op.between]: [new Date(startDate), new Date(endDate)],
+      };
+    }
+
+    if (serviceCenterId) {
+      whereClause.serviceCenterId = serviceCenterId;
+    }
+
+    const typeComponentUsage = await Component.findAll({
+      attributes: [
+        "typeComponentId",
+        [
+          db.sequelize.fn("COUNT", db.sequelize.col("typeComponentId")),
+          "count",
+        ],
+      ],
+      where: whereClause,
+      group: ["typeComponentId"],
+      order: [[db.sequelize.literal("count"), "DESC"]],
+      limit: limit,
+      transaction,
+      lock,
+    });
+
+    return typeComponentUsage.map((item) => item.toJSON());
+  };
+
+  findMostUsedTypeComponents = async ({
+    serviceCenterId,
+    companyId,
+    limit = 10,
+    offset = 0,
+    startDate,
+    endDate,
+  }) => {
+    const where = {
+      warrantyStatus: "ELIGIBLE",
+      typeComponentId: { [Op.ne]: null },
+    };
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt[Op.gte] = startDate;
+      if (endDate) where.createdAt[Op.lte] = endDate;
+    }
+
+    const createdByStaffWhere = {};
+    if (serviceCenterId) createdByStaffWhere.serviceCenterId = serviceCenterId;
+    if (companyId) createdByStaffWhere.vehicleCompanyId = companyId;
+
+    const caselines = await CaseLine.findAll({
+      attributes: [
+        "typeComponentId",
+        [fn("COUNT", col("CaseLine.id")), "warrantyCount"],
+        [fn("SUM", col("CaseLine.quantity")), "totalQuantity"],
+      ],
+      where: where,
+
+      include: [
+        {
+          model: TypeComponent,
+          as: "typeComponent",
+          attributes: ["typeComponentId", "name", "sku", "category", "price"],
+        },
+        {
+          model: GuaranteeCase,
+          as: "guaranteeCase",
+          attributes: [],
+          required: true,
+          include: [
+            {
+              model: VehicleProcessingRecord,
+              as: "vehicleProcessingRecord",
+              attributes: [],
+              required: true,
+              include: [
+                {
+                  model: User,
+                  as: "createdByStaff",
+                  attributes: [],
+                  where:
+                    Object.keys(createdByStaffWhere).length > 0
+                      ? createdByStaffWhere
+                      : undefined,
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+
+      group: [
+        "CaseLine.typeComponentId",
+        "typeComponent.type_component_id",
+        "typeComponent.name",
+        "typeComponent.sku",
+        "typeComponent.category",
+        "typeComponent.price",
+      ],
+      order: [[literal("warrantyCount"), "DESC"]],
+      limit: limit,
+      offset: offset,
+    });
+
+    return caselines.map((item) => item.toJSON());
+  };
+}

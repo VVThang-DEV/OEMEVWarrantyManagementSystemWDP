@@ -1,31 +1,71 @@
 import db from "../models/index.cjs";
+import { ConflictError, NotFoundError } from "../error/index.js";
 
-const { TaskAssignment, User } = db;
+const {
+  TaskAssignment,
+  User,
+  CaseLine,
+  GuaranteeCase,
+  VehicleProcessingRecord,
+  TypeComponent,
+  Vehicle,
+} = db;
 
 class TaskAssignmentRepository {
-  findByGuaranteeCaseIds = async (
-    { guaranteeCaseIds },
+  countActiveTasksByTechnician = async (technicianId, transaction = null) => {
+    const count = await TaskAssignment.count({
+      where: {
+        technicianId: technicianId,
+        isActive: true,
+      },
+      transaction,
+    });
+    return count;
+  };
+
+  createDiagnosisTaskForRecord = async (
+    { vehicleProcessingRecordId, technicianId },
+    transaction
+  ) => {
+    const newTaskAssignment = await TaskAssignment.create(
+      {
+        vehicleProcessingRecordId,
+        technicianId,
+        taskType: "DIAGNOSIS",
+      },
+      { transaction }
+    );
+
+    if (!newTaskAssignment) {
+      return null;
+    }
+
+    return newTaskAssignment.toJSON();
+  };
+
+  findDiagnosisTaskByRecordId = async (
+    { vehicleProcessingRecordId },
     transaction = null,
     lock = null
   ) => {
-    const taskAssignments = await TaskAssignment.findAll({
+    const taskAssignment = await TaskAssignment.findOne({
       where: {
-        guaranteeCaseId: guaranteeCaseIds,
+        vehicleProcessingRecordId: vehicleProcessingRecordId,
         taskType: "DIAGNOSIS",
       },
       transaction,
       lock,
     });
 
-    return taskAssignments.map((ta) => ta.toJSON());
+    return taskAssignment ? taskAssignment.toJSON() : null;
   };
 
-  cancelAssignmentsByGuaranteeCaseIds = async (
-    { guaranteeCaseIds },
+  cancelDiagnosisTaskByRecordId = async (
+    { vehicleProcessingRecordId },
     transaction
   ) => {
     const whereClause = {
-      guaranteeCaseId: guaranteeCaseIds,
+      vehicleProcessingRecordId: vehicleProcessingRecordId,
       taskType: "DIAGNOSIS",
       isActive: true,
     };
@@ -41,28 +81,66 @@ class TaskAssignmentRepository {
     return affectedRows;
   };
 
-  bulkCreateTaskAssignments = async (
-    { guaranteeCaseIds, technicianId },
-    transaction
+  findAllByServiceCenterId = async (
+    { serviceCenterId },
+    transaction = null
   ) => {
-    const taskAssignmentToCreate = guaranteeCaseIds.map((guaranteeCaseId) => ({
-      guaranteeCaseId,
-      taskType: "DIAGNOSIS",
-      technicianId,
-    }));
-
-    const newTaskAssignments = await TaskAssignment.bulkCreate(
-      taskAssignmentToCreate,
-      {
-        transaction,
-      }
-    );
-
-    if (!newTaskAssignments) {
-      return null;
+    if (!serviceCenterId) {
+      return [];
     }
 
-    return newTaskAssignments;
+    const tasks = await TaskAssignment.findAll({
+      include: [
+        {
+          model: User,
+          as: "technician",
+          attributes: ["userId", "name", "email", "phone", "serviceCenterId"],
+          where: { serviceCenterId },
+          required: true,
+        },
+        {
+          model: VehicleProcessingRecord,
+          as: "vehicleProcessingRecord",
+          attributes: [
+            "vehicleProcessingRecordId",
+            "vin",
+            "status",
+            "createdByStaffId",
+          ],
+          required: false, // Use left join
+          include: [
+            {
+              model: Vehicle,
+              as: "vehicle",
+              attributes: ["vin", "modelId"],
+            },
+          ],
+        },
+        {
+          model: CaseLine,
+          as: "caseLine",
+          attributes: [
+            "id",
+            "status",
+            "typeComponentId",
+            "diagnosticTechId",
+            "repairTechId",
+          ],
+          required: false, // Use left join
+          include: [
+            {
+              model: TypeComponent,
+              as: "typeComponent",
+              attributes: ["typeComponentId", "name", "sku"],
+            },
+          ],
+        },
+      ],
+      order: [["assignedAt", "DESC"]],
+      transaction,
+    });
+
+    return tasks.map((task) => task.toJSON());
   };
 
   createTaskAssignmentForCaseline = async (

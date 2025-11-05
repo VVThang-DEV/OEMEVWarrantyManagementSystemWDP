@@ -76,10 +76,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "model",
     });
 
-    // Vehicle.hasMany(models.Component, {
-    //   foreignKey: "vehicle_id",
-    //   as: "components",
-    // });
+    Vehicle.hasMany(models.Component, {
+      foreignKey: "vehicle_vin",
+      sourceKey: "vin",
+      as: "components",
+    });
 
     Vehicle.hasOne(models.VehicleProcessingRecord, {
       foreignKey: "vin",

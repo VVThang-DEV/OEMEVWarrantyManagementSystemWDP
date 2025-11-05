@@ -148,6 +148,48 @@ class ComponentRepository {
     return updatedComponent ? updatedComponent.toJSON() : null;
   };
 
+  updateRemovedComponentStatus = async (
+    {
+      vehicleVin,
+      componentId,
+      installedAt,
+      status = "PENDING_RETURN",
+      currentHolderId,
+    },
+    transaction = null
+  ) => {
+    const updateData = {
+      status: status,
+    };
+
+    if (vehicleVin !== undefined) {
+      updateData.vehicleVin = vehicleVin;
+    }
+
+    if (installedAt !== undefined) {
+      updateData.installedAt = installedAt;
+    }
+
+    if (currentHolderId !== undefined) {
+      updateData.currentHolderId = currentHolderId;
+    }
+
+    const [rowsUpdated] = await Component.update(updateData, {
+      where: { componentId: componentId },
+      transaction: transaction,
+    });
+
+    if (rowsUpdated <= 0) {
+      return null;
+    }
+
+    const updatedComponent = await Component.findByPk(componentId, {
+      transaction: transaction,
+    });
+
+    return updatedComponent ? updatedComponent.toJSON() : null;
+  };
+
   belongToProcessingByVin = async (
     serialNumber,
     vin,
@@ -182,6 +224,24 @@ class ComponentRepository {
     });
 
     return component ? component.toJSON() : null;
+  };
+
+  findBySerialNumbers = async (serialNumbers, transaction = null, lock = null) => {
+    const components = await Component.findAll({
+      where: {
+        serialNumber: {
+          [Op.in]: serialNumbers,
+        },
+      },
+      transaction,
+      lock,
+    });
+    return components.map((component) => component.toJSON());
+  };
+
+  bulkCreate = async (componentsData, transaction = null) => {
+    const components = await Component.bulkCreate(componentsData, { transaction });
+    return components.map((component) => component.toJSON());
   };
 
   updateStatusComponentReturn = async (
@@ -227,6 +287,26 @@ class ComponentRepository {
     return components.map((component) => component.toJSON());
   };
 
+  findComponentInVehicleProcessingByTypeAndVin = async (
+    { typeComponentId, vehicleVin },
+    transaction = null,
+    lock = null
+  ) => {
+    const component = await Component.findOne({
+      where: {
+        typeComponentId: typeComponentId,
+        vehicleVin: vehicleVin,
+        status: {
+          [Op.in]: ["INSTALLED"],
+        },
+      },
+      transaction: transaction,
+      lock: lock,
+    });
+
+    return component ? component.toJSON() : null;
+  };
+
   findComponentInstalledOnVehicle = async (
     { vehicleVin, status },
     transaction = null,
@@ -248,6 +328,8 @@ class ComponentRepository {
         },
       ],
       order: [["installedAt", "DESC"]],
+      transaction: transaction,
+      lock: lock,
     });
 
     return component ? component.toJSON() : null;

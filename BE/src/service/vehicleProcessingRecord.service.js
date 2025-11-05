@@ -164,9 +164,17 @@ class VehicleProcessingRecordService {
     let oldTechnicianId = null;
 
     const rawResult = await db.sequelize.transaction(async (t) => {
+      const technician = await this.#userRepository.findUserById(
+        { userId: technicianId },
+        t
+      );
+      if (!technician) {
+        throw new NotFoundError("Technician not found");
+      }
+
       await this.#canAssignTask({
         serviceCenterId: serviceCenterId,
-        technicianId: technicianId,
+        technician: technician,
         vehicleProcessingRecordId: vehicleProcessingRecordId,
         transaction: t,
         lock: Transaction.LOCK.UPDATE,
@@ -196,10 +204,6 @@ class VehicleProcessingRecordService {
         );
       }
 
-      const guaranteeCaseIds = existingRecord?.guaranteeCases.map(
-        (gc) => gc?.guaranteeCaseId
-      );
-
       const schedule = await this.#workScheduleRepository.getMySchedule({
         technicianId: technicianId,
         workDate: dayjs().format("YYYY-MM-DD"),
@@ -217,23 +221,34 @@ class VehicleProcessingRecordService {
         );
       }
 
+      const activeTaskCount =
+        await this.#taskAssignmentRepository.countActiveTasksByTechnician(
+          technicianId,
+          t
+        );
+      if (activeTaskCount >= technician.role.maxTasks) {
+        throw new ConflictError(
+          `Technician has reached the maximum limit of ${technician.role.maxTasks} active tasks.`
+        );
+      }
+
       if (oldTechnicianId && oldTechnicianId !== technicianId) {
         const affectedRows =
-          await this.#taskAssignmentRepository.cancelAssignmentsByGuaranteeCaseIds(
+          await this.#taskAssignmentRepository.cancelDiagnosisTaskByRecordId(
             {
-              guaranteeCaseIds: guaranteeCaseIds,
+              vehicleProcessingRecordId: vehicleProcessingRecordId,
             },
             t
           );
 
         if (affectedRows === 0) {
           throw new ConflictError(
-            `No active assignments found for old technician ${oldTechnicianId}. Data may be inconsistent or assignments were already cancelled.`
+            `No active diagnosis task found for old technician ${oldTechnicianId}. Data may be inconsistent or the task was already cancelled.`
           );
         }
       }
 
-      const [updatedRecord, updatedGuaranteeCases, newTaskAssignments] =
+      const [updatedRecord, updatedGuaranteeCases, newTaskAssignment] =
         await Promise.all([
           this.#vehicleProcessingRecordRepository.updateMainTechnician(
             {
@@ -251,16 +266,19 @@ class VehicleProcessingRecordService {
             t
           ),
 
-          this.#taskAssignmentRepository.bulkCreateTaskAssignments(
-            { guaranteeCaseIds: guaranteeCaseIds, technicianId: technicianId },
+          this.#taskAssignmentRepository.createDiagnosisTaskForRecord(
+            {
+              vehicleProcessingRecordId: vehicleProcessingRecordId,
+              technicianId: technicianId,
+            },
             t
           ),
         ]);
 
-      return { updatedRecord, updatedGuaranteeCases, newTaskAssignments };
+      return { updatedRecord, updatedGuaranteeCases, newTaskAssignment };
     });
 
-    const { updatedRecord, updatedGuaranteeCases, newTaskAssignments } =
+    const { updatedRecord, updatedGuaranteeCases, newTaskAssignment } =
       rawResult;
 
     if (updatedRecord === 0) {
@@ -271,9 +289,9 @@ class VehicleProcessingRecordService {
       throw new Error("Guarantee cases were not updated.");
     }
 
-    if (!newTaskAssignments || newTaskAssignments.length === 0) {
+    if (!newTaskAssignment) {
       throw new Error(
-        "Failed to create task assignments for the technician. Please try again."
+        "Failed to create a task assignment for the technician. Please try again."
       );
     }
 
@@ -287,19 +305,19 @@ class VehicleProcessingRecordService {
         status: guaranteeCase?.status,
         leadTech: guaranteeCase?.leadTechId,
       })),
-      assignments: newTaskAssignments.map((assignment) => ({
-        assignmentId: assignment?.taskAssignmentId,
-        guaranteeCaseId: assignment?.guaranteeCaseId,
-        technicianId: assignment?.technicianId,
-        taskType: assignment?.taskType,
-        assignedAt: formatUTCtzHCM(assignment?.assignedAt),
-      })),
+      assignment: {
+        assignmentId: newTaskAssignment?.taskAssignmentId,
+        vehicleProcessingRecordId: newTaskAssignment?.vehicleProcessingRecordId,
+        technicianId: newTaskAssignment?.technicianId,
+        taskType: newTaskAssignment?.taskType,
+        assignedAt: formatUTCtzHCM(newTaskAssignment?.assignedAt),
+      },
     };
 
     if (oldTechnicianId && oldTechnicianId !== technicianId) {
       const oldTechRoom = `user_${oldTechnicianId}`;
       const unassignPayload = {
-        message: "You have been unassigned from tasks.",
+        message: "You have been unassigned from a diagnosis task.",
         recordId: updatedRecord?.vehicleProcessingRecordId,
         vin: updatedRecord?.vin,
         reason: "Reassigned to another technician",
@@ -317,7 +335,7 @@ class VehicleProcessingRecordService {
     const room = `user_${technicianId}`;
     const event = "new_task_assignment_notification";
     const payload = {
-      message: "You have been assigned new tasks.",
+      message: "You have been assigned a new diagnosis task.",
       assignmentDetails: formatUpdatedRecord,
       timestamp: dayjs(),
       room: room,
@@ -452,12 +470,14 @@ class VehicleProcessingRecordService {
         }
       }
 
+      const checkOutDate = new Date();
+
       const completedRecord =
         await this.#vehicleProcessingRecordRepository.completeRecord(
           {
             vehicleProcessingRecordId,
             status: "COMPLETED",
-            checkOutDate: formatUTCtzHCM(dayjs()),
+            // checkOutDate: checkOutDate,
           },
           transaction
         );
@@ -465,7 +485,16 @@ class VehicleProcessingRecordService {
       return completedRecord;
     });
 
-    return rawResult;
+    if (!rawResult) {
+      return rawResult;
+    }
+
+    return {
+      ...rawResult,
+      checkOutDate: rawResult.checkOutDate
+        ? formatUTCtzHCM(rawResult.checkOutDate)
+        : null,
+    };
   };
 
   makeDiagnosisCompleted = async ({
@@ -572,46 +601,35 @@ class VehicleProcessingRecordService {
 
       await this.#notificationService.sendToRoom(roomName, eventName, data);
 
-      return { record, updatedGuaranteeCases, updatedCaseLines };
+      return { record, updatedGuaranteeCases, updatedCaseLines, updatedRecord };
     });
 
     return {
       record: rawResult.record,
       updatedGuaranteeCases: rawResult.updatedGuaranteeCases,
       updatedCaseLines: rawResult.updatedCaseLines,
+      updatedRecord: rawResult.updatedRecord,
     };
   };
 
   #canAssignTask = async ({
     serviceCenterId: managerServiceCenterId,
-    technicianId,
+    technician,
     vehicleProcessingRecordId,
     transaction = null,
     lock = null,
   }) => {
-    const [record, technician] = await Promise.all([
-      this.#vehicleProcessingRecordRepository.findDetailById(
-        {
-          id: vehicleProcessingRecordId,
-          serviceCenterId: managerServiceCenterId,
-        },
-        transaction,
-        lock
-      ),
-
-      this.#userRepository.findUserById(
-        { userId: technicianId },
-        transaction,
-        lock
-      ),
-    ]);
+    const record = await this.#vehicleProcessingRecordRepository.findDetailById(
+      {
+        id: vehicleProcessingRecordId,
+        serviceCenterId: managerServiceCenterId,
+      },
+      transaction,
+      lock
+    );
 
     if (!record) {
       throw new NotFoundError("Record not found.");
-    }
-
-    if (!technician) {
-      throw new NotFoundError(`Technician with ID: ${technicianId} not found.`);
     }
 
     const ASSIGNABLE_STATUSES = ["CHECKED_IN", "IN_DIAGNOSIS"];

@@ -28,6 +28,8 @@ import stockTransferRequestRouter from "./src/api/routes/stockTransferRequest.ro
 import workScheduleRouter from "./src/api/routes/workSchedule.router.js";
 import mailRouter from "./src/api/routes/mail.router.js";
 import inventoryRouter from "./src/api/routes/inventory.router.js";
+import taskAssignmentRouter from "./src/api/routes/taskAssignmentRouter.js";
+import vehicleModelRouter from "./src/api/routes/vehicleModel.router.js";
 
 app.get("/", async (req, res) => {
   res.send("Hello world");
@@ -48,9 +50,10 @@ app.use(`${url}/warehouses`, warehouseRouter);
 app.use(`${url}/components`, componentRouter);
 app.use(`${url}/mail`, mailRouter);
 app.use(`${url}/inventory`, inventoryRouter);
-
 app.use(`${url}/stock-transfer-requests`, stockTransferRequestRouter);
 app.use(`${url}/work-schedules`, workScheduleRouter);
+app.use(`${url}/task-assignments`, taskAssignmentRouter);
+app.use(`${url}/oem-vehicle-models`, vehicleModelRouter);
 
 app.use(handleError);
 

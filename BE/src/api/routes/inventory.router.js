@@ -5,10 +5,7 @@ import {
   authorizationByRole,
   validate,
 } from "../middleware/index.js";
-import {
-  createInventoryAdjustmentBodySchema,
-  createInventoryAdjustmentQuerySchema,
-} from "../../validators/inventory.validator.js";
+import { createInventoryAdjustmentBodySchema } from "../../validators/inventory.validator.js";
 
 const router = express.Router();
 
@@ -212,54 +209,41 @@ router.get(
 
 /**
  * @swagger
- * /inventory/adjustments:
- *   post:
- *     summary: Tạo điều chỉnh tồn kho thủ công
- *     description: Parts coordinator tạo điều chỉnh tồn kho cho các trường hợp đặc biệt như nhập hàng từ nhà cung cấp, hàng hỏng/mất mát, kiểm kê kho phát hiện chênh lệch. Hệ thống tự động cập nhật quantityInStock và gửi notification.
+ * /inventory/most-used-type-components:
+ *   get:
+ *     summary: Thống kê loại linh kiện được sử dụng nhiều nhất
+ *     description: Lấy danh sách các loại linh kiện đã được sử dụng (install) nhiều nhất trong các caseline hoàn thành, có filter theo khoảng thời gian.
  *     tags: [Inventory Management]
  *     security:
  *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - stockId
- *               - adjustmentType
- *               - quantity
- *               - reason
- *             properties:
- *               stockId:
- *                 type: string
- *                 format: uuid
- *                 description: ID của stock item cần điều chỉnh
- *                 example: "550e8400-e29b-41d4-a716-446655440000"
- *               adjustmentType:
- *                 type: string
- *                 enum: [IN, OUT]
- *                 description: Loại điều chỉnh - IN (nhập kho, tăng tồn) hoặc OUT (xuất kho, giảm tồn)
- *                 example: "IN"
- *               quantity:
- *                 type: integer
- *                 minimum: 1
- *                 description: Số lượng điều chỉnh (luôn dương)
- *                 example: 10
- *               reason:
- *                 type: string
- *                 minLength: 1
- *                 maxLength: 255
- *                 description: "Lý do điều chỉnh: DAMAGE (hàng hỏng), LOSS (mất mát), FOUND (tìm thấy), SUPPLIER_DELIVERY (nhập từ NCC), INVENTORY_COUNT (kiểm kê), MANUAL_CORRECTION (sửa lỗi), hoặc lý do khác"
- *                 example: "SUPPLIER_DELIVERY"
- *               note:
- *                 type: string
- *                 maxLength: 1000
- *                 description: Ghi chú chi tiết về điều chỉnh (optional)
- *                 example: "Nhập 10 màn hình LCD từ nhà cung cấp Samsung, PO#12345, invoice INV-2025-001"
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Số lượng kết quả tối đa
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Trang hiện tại (bắt đầu từ 1)
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Thời điểm bắt đầu tính thống kê (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Thời điểm kết thúc thống kê (YYYY-MM-DD)
  *     responses:
- *       201:
- *         description: Tạo điều chỉnh tồn kho thành công
+ *       200:
+ *         description: Lấy thống kê thành công
  *         content:
  *           application/json:
  *             schema:
@@ -271,71 +255,121 @@ router.get(
  *                 data:
  *                   type: object
  *                   properties:
- *                     adjustment:
+ *                     components:
  *                       type: object
  *                       properties:
- *                         adjustmentId:
- *                           type: string
- *                           format: uuid
- *                         stockId:
- *                           type: string
- *                           format: uuid
- *                         adjustmentType:
- *                           type: string
- *                           example: "IN"
- *                         quantity:
- *                           type: integer
- *                           example: 10
- *                         reason:
- *                           type: string
- *                           example: "SUPPLIER_DELIVERY"
- *                         note:
- *                           type: string
- *                           example: "Nhập 10 màn hình LCD từ Samsung"
- *                         adjustedByUserId:
- *                           type: string
- *                           format: uuid
- *                         adjustedAt:
- *                           type: string
- *                           format: date-time
- *                         createdAt:
- *                           type: string
- *                           format: date-time
- *                         updatedAt:
- *                           type: string
- *                           format: date-time
- *                     updatedStock:
- *                       type: object
- *                       properties:
- *                         stockId:
- *                           type: string
- *                           format: uuid
- *                         warehouseId:
- *                           type: string
- *                           format: uuid
- *                         typeComponentId:
- *                           type: string
- *                           format: uuid
- *                         quantityInStock:
- *                           type: integer
- *                           example: 60
- *                           description: Số lượng tồn kho sau khi điều chỉnh
- *                         quantityReserved:
- *                           type: integer
- *                           example: 5
+ *                         items:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               typeComponentId:
+ *                                 type: string
+ *                                 format: uuid
+ *                               typeComponentName:
+ *                                 type: string
+ *                                 example: Pin cao áp 60kWh
+ *                               usageCount:
+ *                                 type: integer
+ *                                 example: 25
+ *                               warehouses:
+ *                                 type: array
+ *                                 items:
+ *                                   type: object
+ *                                   properties:
+ *                                     warehouseId:
+ *                                       type: string
+ *                                       format: uuid
+ *                                     warehouseName:
+ *                                       type: string
+ *                                     quantityUsed:
+ *                                       type: integer
+ *                         pagination:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: integer
+ *                               example: 50
+ *                             pages:
+ *                               type: integer
+ *                               example: 5
+ *                             limit:
+ *                               type: integer
+ *                               example: 10
+ *                             page:
+ *                               type: integer
+ *                               example: 1
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền truy cập
+ *       500:
+ *         description: Lỗi server
+ */
+router.get(
+  "/most-used-type-components",
+  authentication,
+  authorizationByRole([
+    "parts_coordinator_company",
+    "service_center_manager",
+    "evm_staff",
+    "parts_coordinator_service_center",
+  ]),
+  attachCompanyContext,
+  async (req, res, next) => {
+    const inventoryController = req.container.resolve("inventoryController");
+
+    await inventoryController.findMostUsedTypeComponentsInWarehouse(
+      req,
+      res,
+      next
+    );
+  }
+);
+
+/**
+ * @swagger
+ * /inventory/adjustments:
+ *   post:
+ *     summary: Tạo điều chỉnh tồn kho thủ công
+ *     description: |
+ *       Tạo một phiếu điều chỉnh kho. Hỗ trợ 2 kịch bản:
+ *       1.  **Nhập kho (`adjustmentType: IN`):** Cung cấp một danh sách các `components` mới (với serial number) để thêm vào hệ thống. Hệ thống sẽ tạo các bản ghi `Component` mới và tự động cập nhật `quantityInStock`.
+ *       2.  **Xuất kho (`adjustmentType: OUT`):** Cung cấp `quantity` để giảm số lượng tồn kho. Dùng cho các trường hợp hàng hỏng, mất mát, v.v.
+ *     tags: [Inventory Management]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             oneOf:
+ *               - $ref: '#/components/schemas/InventoryAdjustmentIn'
+ *               - $ref: '#/components/schemas/InventoryAdjustmentOut'
+ *           examples:
+ *             in:
+ *               summary: Ví dụ Nhập kho
+ *               value:
+ *                 stockId: "550e8400-e29b-41d4-a716-446655440000"
+ *                 adjustmentType: "IN"
+ *                 reason: "SUPPLIER_DELIVERY"
+ *                 note: "Nhập hàng từ NCC A"
+ *                 components:
+ *                   - serialNumber: "SN10001"
+ *                   - serialNumber: "SN10002"
+ *             out:
+ *               summary: Ví dụ Xuất kho
+ *               value:
+ *                 stockId: "550e8400-e29b-41d4-a716-446655440000"
+ *                 adjustmentType: "OUT"
+ *                 reason: "DAMAGE"
+ *                 quantity: 2
+ *     responses:
+ *       201:
+ *         description: Tạo điều chỉnh tồn kho thành công
  *       400:
  *         description: Dữ liệu không hợp lệ
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: error
- *                 message:
- *                   type: string
- *                   example: "quantity must be at least 1"
  *       401:
  *         description: Chưa xác thực
  *       403:
@@ -344,19 +378,6 @@ router.get(
  *         description: Không tìm thấy stock item
  *       409:
  *         description: Conflict - Không đủ số lượng khả dụng cho adjustment type OUT
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: error
- *                 message:
- *                   type: string
- *                   example: "Insufficient available stock. Available: 5, Requested: 10"
- *       500:
- *         description: Lỗi server
  */
 router.post(
   "/adjustments",
@@ -366,13 +387,257 @@ router.post(
     "parts_coordinator_service_center",
   ]),
   validate(createInventoryAdjustmentBodySchema, "body"),
-  validate(createInventoryAdjustmentQuerySchema, "query"),
+  // validate(createInventoryAdjustmentQuerySchema, "query"),
   attachCompanyContext,
 
   async (req, res, next) => {
     const inventoryController = req.container.resolve("inventoryController");
 
     await inventoryController.createInventoryAdjustment(req, res, next);
+  }
+);
+
+/**
+ * @swagger
+ * /inventory/adjustments:
+ *   get:
+ *     summary: Lấy lịch sử các lần điều chỉnh kho
+ *     description: Parts coordinator lấy danh sách lịch sử các phiếu điều chỉnh kho (nhập/xuất thủ công) để kiểm toán và truy vết. Hỗ trợ filter và phân trang.
+ *     tags: [Inventory Management]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: warehouseId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Lọc theo ID của kho
+ *       - in: query
+ *         name: typeComponentId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Lọc theo ID của loại linh kiện
+ *       - in: query
+ *         name: adjustmentType
+ *         schema:
+ *           type: string
+ *           enum: [IN, OUT]
+ *         description: Lọc theo loại điều chỉnh (IN hoặc OUT)
+ *       - in: query
+ *         name: reason
+ *         schema:
+ *           type: string
+ *         description: Lọc theo lý do điều chỉnh (ví dụ, SUPPLIER_DELIVERY, DAMAGE)
+ *       - in: query
+ *         name: adjustedByUserId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Lọc theo ID người thực hiện
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Lọc từ ngày (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Lọc đến ngày (YYYY-MM-DD)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Lấy lịch sử điều chỉnh thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/InventoryAdjustment'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         currentPage:
+ *                           type: integer
+ *                           example: 1
+ *                         totalPages:
+ *                           type: integer
+ *                           example: 3
+ *                         totalItems:
+ *                           type: integer
+ *                           example: 55
+ *                         itemsPerPage:
+ *                           type: integer
+ *                           example: 20
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền truy cập
+ */
+router.get(
+  "/adjustments",
+  authentication,
+  authorizationByRole([
+    "parts_coordinator_company",
+    "parts_coordinator_service_center",
+  ]),
+  attachCompanyContext,
+  async (req, res, next) => {
+    const inventoryController = req.container.resolve("inventoryController");
+    await inventoryController.getInventoryAdjustments(req, res, next);
+  }
+);
+
+/**
+ * @swagger
+ * /inventory/adjustments/{adjustmentId}:
+ *   get:
+ *     summary: Lấy chi tiết một phiếu điều chỉnh kho
+ *     description: Parts coordinator lấy chi tiết một phiếu điều chỉnh kho bằng ID của nó. Cần có đủ quyền hạn và ID hợp lệ.
+ *     tags: [Inventory Management]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adjustmentId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         required: true
+ *         description: ID của phiếu điều chỉnh kho
+ *         example: "550e8400-e29b-41d4-a716-446655440000"
+ *     responses:
+ *       200:
+ *         description: Lấy chi tiết phiếu điều chỉnh kho thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   $ref: '#/components/schemas/InventoryAdjustment'
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền truy cập
+ *       404:
+ *         description: Không tìm thấy phiếu điều chỉnh kho
+ */
+router.get(
+  "/adjustments/:adjustmentId",
+  authentication,
+  authorizationByRole([
+    "parts_coordinator_company",
+    "parts_coordinator_service_center",
+  ]),
+  attachCompanyContext,
+  async (req, res, next) => {
+    const inventoryController = req.container.resolve("inventoryController");
+    await inventoryController.getInventoryAdjustmentById(req, res, next);
+  }
+);
+
+/**
+ * @swagger
+ * /inventory/stocks/{stockId}/history:
+ *   get:
+ *     summary: Lấy lịch sử giao dịch của một mục tồn kho
+ *     description: Lấy một sổ cái (ledger) đầy đủ, được sắp xếp theo thời gian, của tất cả các giao dịch cho một `stockId` cụ thể. Bao gồm điều chỉnh thủ công, đặt trước, sử dụng, và chuyển kho.
+ *     tags: [Inventory Management]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: stockId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         required: true
+ *         description: ID của mục tồn kho (stock item)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Lấy lịch sử thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     history:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           eventType:
+ *                             type: string
+ *                             enum: [ADJUSTMENT_IN, ADJUSTMENT_OUT, RESERVATION_CREATED, RESERVATION_CANCELLED, INSTALLATION, STOCK_TRANSFER_OUT, STOCK_TRANSFER_IN]
+ *                           quantityChange:
+ *                             type: integer
+ *                           eventDate:
+ *                             type: string
+ *                             format: date-time
+ *                           details:
+ *                             type: object
+ *                     pagination:
+ *                       type: object
+ *       401:
+ *         description: Chưa xác thực
+ *       403:
+ *         description: Không có quyền truy cập
+ *       404:
+ *         description: Không tìm thấy mục tồn kho
+ */
+router.get(
+  "/stocks/:stockId/history",
+  authentication,
+  authorizationByRole([
+    "parts_coordinator_company",
+    "parts_coordinator_service_center",
+  ]),
+  attachCompanyContext,
+  async (req, res, next) => {
+    const inventoryController = req.container.resolve("inventoryController");
+    await inventoryController.getStockHistory(req, res, next);
   }
 );
 

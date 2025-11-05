@@ -11,7 +11,6 @@ class OemVehicleModelController {
       placeOfManufacture,
       generalWarrantyDuration,
       generalWarrantyMileage,
-      components,
     } = req.body;
 
     const { companyId } = req;
@@ -22,7 +21,6 @@ class OemVehicleModelController {
       placeOfManufacture,
       generalWarrantyDuration,
       generalWarrantyMileage,
-      components,
       companyId,
     });
 
@@ -32,4 +30,5 @@ class OemVehicleModelController {
     });
   };
 }
+
 export default OemVehicleModelController;
