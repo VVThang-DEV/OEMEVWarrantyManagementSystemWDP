@@ -242,10 +242,23 @@ class VehicleService {
     return vehicleWithWarranty;
   };
 
-  getVehicleComponents = async ({ vin }) => {
+  getVehicleComponents = async ({ vin, companyId, status = "INSTALLED" }) => {
+    if (!vin) {
+      throw new BadRequestError("vin is required");
+    }
+
+    if (!companyId) {
+      throw new ForbiddenError("You do not have permission");
+    }
+
+    const normalizedStatus =
+      typeof status === "string" ? status.toUpperCase() : status;
+
     const vehicle =
       await this.#vehicleRepository.findWarrantedComponentsByVehicleVin({
         vin,
+        companyId,
+        status: normalizedStatus,
       });
 
     if (!vehicle) {
