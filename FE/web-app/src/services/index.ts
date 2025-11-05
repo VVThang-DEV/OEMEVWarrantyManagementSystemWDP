@@ -61,8 +61,6 @@ export type {
   ComponentReservation,
   PickupResponse,
   InstallComponentResponse,
-  ReturnComponentRequest,
-  ReturnComponentResponse,
 } from "./componentReservationService";
 
 export { default as technicianService } from "./technicianService";
