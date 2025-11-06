@@ -67,6 +67,18 @@ class MailService {
     ]);
   };
 
+  sendMail = async (to, subject, text, html) => {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+      html,
+    };
+
+    await this.#transporter.sendMail(mailOptions);
+  };
+
   verifyOTP = async ({ email, otp }) => {
     if (
       typeof email !== "string" ||
