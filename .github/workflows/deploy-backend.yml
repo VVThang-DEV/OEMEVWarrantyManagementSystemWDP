@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "BE/**"
+      - "**"
   workflow_dispatch:
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
+          source: "BE/*"
           target: "/home/${{ secrets.SSH_USER }}/myapp/backend"
 
       - name: 🔁 Install & Restart via PM2
