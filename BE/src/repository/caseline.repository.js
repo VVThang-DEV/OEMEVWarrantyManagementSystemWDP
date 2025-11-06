@@ -590,3 +590,5 @@ class CaseLineRepository {
     return caselines.map((item) => item.toJSON());
   };
 }
+
+export default CaseLineRepository;
