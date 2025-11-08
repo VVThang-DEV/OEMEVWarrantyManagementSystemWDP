@@ -3,6 +3,18 @@ import db from "../models/index.cjs";
 const { VehicleModel } = db;
 
 class OemVehicleModelRepository {
+  findBySku = async (sku, transaction = null, lock = null) => {
+    const record = await VehicleModel.findOne({
+      where: {
+        sku: sku,
+      },
+      transaction: transaction,
+      lock: lock,
+    });
+
+    return record ? record.toJSON() : null;
+  };
+
   findByNameAndCompanyId = async (
     { vehicleModelName, companyId },
     transaction = null,

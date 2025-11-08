@@ -215,5 +215,24 @@ class VehicleProcessingRecordController {
       data: completedRecord,
     });
   };
+
+  cancelRecord = async (req, res, next) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const { serviceCenterId, roleName, userId } = req.user;
+
+    const result = await this.#vehicleProcessingRecordService.cancelRecord({
+      vehicleProcessingRecordId: id,
+      reason,
+      serviceCenterId,
+      roleName,
+      userId,
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: result,
+    });
+  };
 }
 export default VehicleProcessingRecordController;

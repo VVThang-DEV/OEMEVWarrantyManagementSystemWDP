@@ -4,7 +4,7 @@ dotenv.config();
 
 const redisClient = new IORedis({
   host: process.env.REDIS_HOST || "localhost",
-  port: process.env.REDIS_PORT,
+  port: process.env.REDIS_PORT || "6379",
 });
 
 redisClient.on("connect", () => console.log("Kết nối đến Redis thành công"));

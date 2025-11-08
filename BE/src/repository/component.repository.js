@@ -352,6 +352,27 @@ class ComponentRepository {
 
     return components.map((component) => component.toJSON());
   };
+
+  updateComponentStatusBySerialNumbers = async (serialNumbers, status, warehouseId, transaction = null) => {
+    const updateData = { status };
+    if (warehouseId !== undefined) {
+      updateData.warehouseId = warehouseId;
+    }
+
+    const [numberOfAffectedRows] = await Component.update(
+      updateData,
+      {
+        where: {
+          serialNumber: {
+            [Op.in]: serialNumbers,
+          },
+        },
+        transaction,
+      }
+    );
+
+    return numberOfAffectedRows;
+  };
 }
 
 export default ComponentRepository;

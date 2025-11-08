@@ -1,5 +1,8 @@
+import Joi from "joi";
+
 export const createVehicleModelSchema = Joi.object({
   vehicleModelName: Joi.string().trim().required(),
+  sku: Joi.string().trim().required(),
   yearOfLaunch: Joi.date().iso().required(),
   placeOfManufacture: Joi.string().trim().required(),
   generalWarrantyDuration: Joi.number().integer().min(0).optional(),

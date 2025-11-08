@@ -61,10 +61,12 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "technician_id",
       as: "technician",
     });
+
     TaskAssignment.belongsTo(models.CaseLine, {
       foreignKey: "case_line_id",
       as: "caseLine",
     });
+
     TaskAssignment.belongsTo(models.VehicleProcessingRecord, {
       foreignKey: "vehicle_processing_record_id",
       as: "vehicleProcessingRecord",

@@ -1,4 +1,5 @@
 import db from "../models/index.cjs";
+import { Op } from "sequelize";
 
 const { GuaranteeCase, VehicleProcessingRecord, Vehicle, User, CaseLine } = db;
 
@@ -157,6 +158,45 @@ class GuaranteeCaseRepository {
     });
 
     return record ? record.toJSON() : null;
+  };
+
+  bulkUpdateStatus = async (
+    { guaranteeCaseIds, status },
+    transaction = null,
+    lock = null
+  ) => {
+    if (!Array.isArray(guaranteeCaseIds) || guaranteeCaseIds.length === 0) {
+      return [];
+    }
+
+    const [affectedRows] = await GuaranteeCase.update(
+      { status },
+      {
+        where: {
+          guaranteeCaseId: {
+            [Op.in]: guaranteeCaseIds,
+          },
+        },
+        transaction,
+        lock,
+      }
+    );
+
+    if (affectedRows === 0) {
+      return [];
+    }
+
+    const updatedGuaranteeCases = await GuaranteeCase.findAll({
+      where: {
+        guaranteeCaseId: {
+          [Op.in]: guaranteeCaseIds,
+        },
+      },
+      transaction,
+      lock,
+    });
+
+    return updatedGuaranteeCases.map((gc) => gc.toJSON());
   };
 }
 

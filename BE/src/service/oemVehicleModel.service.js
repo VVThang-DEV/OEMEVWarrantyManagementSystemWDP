@@ -18,6 +18,7 @@ class OemVehicleModelService {
 
   createVehicleModel = async ({
     vehicleModelName,
+    sku,
     yearOfLaunch,
     placeOfManufacture,
     generalWarrantyDuration,
@@ -25,19 +26,18 @@ class OemVehicleModelService {
     companyId,
   }) => {
     return db.sequelize.transaction(async (transaction) => {
-      const existingModel =
-        await this.#oemVehicleModelRepository.findByNameAndCompanyId(
-          vehicleModelName,
-          companyId,
-          transaction
-        );
+      const existingSku = await this.#oemVehicleModelRepository.findBySku(
+        sku,
+        transaction
+      );
 
-      if (existingModel) {
-        throw new ConflictError("Vehicle model already exists");
+      if (existingSku) {
+        throw new ConflictError("Vehicle model with this SKU already exists");
       }
 
       const dataToCreatevehicleModel = {
         vehicleModelName,
+        sku,
         yearOfLaunch,
         placeOfManufacture,
         generalWarrantyDuration,

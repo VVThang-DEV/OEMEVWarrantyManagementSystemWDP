@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import * as xlsx from "xlsx";
 import {
   BadRequestError,
   ConflictError,
@@ -8,16 +9,154 @@ import {
 import db from "../models/index.cjs";
 import { Transaction } from "sequelize";
 
+const TYPE_COMPONENT_CATEGORIES = [
+  "HIGH_VOLTAGE_BATTERY",
+  "POWERTRAIN",
+  "CHARGING_SYSTEM",
+  "THERMAL_MANAGEMENT",
+  "LOW_VOLTAGE_SYSTEM",
+  "BRAKING",
+  "SUSPENSION_STEERING",
+  "HVAC",
+  "BODY_CHASSIS",
+  "INFOTAINMENT_ADAS",
+];
+
+const TYPE_COMPONENT_CATEGORY_SET = new Set(TYPE_COMPONENT_CATEGORIES);
+
 class VehicleService {
   #vehicleRepository;
   #customerService;
   #componentRepository;
+  #oemVehicleModelRepository;
 
-  constructor({ vehicleRepository, customerService, componentRepository }) {
+  constructor({
+    vehicleRepository,
+    customerService,
+    componentRepository,
+    oemVehicleModelRepository,
+  }) {
     this.#vehicleRepository = vehicleRepository;
     this.#customerService = customerService;
     this.#componentRepository = componentRepository;
+    this.#oemVehicleModelRepository = oemVehicleModelRepository;
   }
+
+  bulkCreateFromExcel = async (fileBuffer, companyId) => {
+    const workbook = xlsx.read(fileBuffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(worksheet, {
+      header: 1,
+      defval: null,
+      blankrows: false,
+    });
+
+    if (rows.length <= 1) {
+      throw new BadRequestError("Excel file is empty or has invalid format.");
+    }
+
+    const requiredHeaders = [
+      "vin",
+      "model_sku",
+      "date_of_manufacture",
+      "place_of_manufacture",
+    ];
+
+    const headerRow = rows[0] || [];
+    const normalizedHeaders = headerRow.map((header) =>
+      typeof header === "string" ? header.trim().toLowerCase() : ""
+    );
+
+    for (const header of requiredHeaders) {
+      if (!normalizedHeaders.includes(header)) {
+        throw new BadRequestError(
+          `Missing required column in Excel file: ${header}`
+        );
+      }
+    }
+
+    const data = xlsx.utils.sheet_to_json(worksheet, {
+      header: requiredHeaders,
+      range: 1,
+      defval: null,
+      blankrows: false,
+    });
+
+    const vins = data.map((row) => row.vin);
+    const skus = [...new Set(data.map((row) => row.model_sku))];
+
+    const [existingVehicles, vehicleModels] = await Promise.all([
+      this.#vehicleRepository.findAllByVins(vins),
+
+      Promise.all(
+        skus.map((sku) => this.#oemVehicleModelRepository.findBySku(sku))
+      ),
+    ]);
+
+    const existingVins = new Set(existingVehicles.map((v) => v.vin));
+
+    const vehicleModelMap = new Map(
+      vehicleModels.filter(Boolean).map((model) => [model.sku, model])
+    );
+
+    const vehiclesToCreate = [];
+    const errors = [];
+    const seenVinInFile = new Set();
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowIndex = i + 2;
+
+      const vin = row.vin;
+
+      if (seenVinInFile.has(vin)) {
+        errors.push(
+          `Row ${rowIndex}: VIN '${vin}' is duplicated within the file.`
+        );
+
+        continue;
+      }
+
+      seenVinInFile.add(vin);
+
+      if (existingVins.has(vin)) {
+        errors.push(`Row ${rowIndex}: VIN '${vin}' already exists.`);
+        continue;
+      }
+
+      const model = vehicleModelMap.get(row.model_sku);
+      if (!model) {
+        errors.push(`Row ${rowIndex}: Model SKU '${row.model_sku}' not found.`);
+
+        continue;
+      }
+
+      if (model.vehicleCompanyId !== companyId) {
+        errors.push(
+          `Row ${rowIndex}: Model SKU '${row.model_sku}' does not belong to your company.`
+        );
+        continue;
+      }
+
+      vehiclesToCreate.push({
+        vin: row.vin,
+        vehicleModelId: model.vehicleModelId,
+        dateOfManufacture: row.date_of_manufacture,
+        placeOfManufacture: row.place_of_manufacture,
+      });
+    }
+
+    if (vehiclesToCreate.length > 0) {
+      await this.#vehicleRepository.bulkCreate(vehiclesToCreate);
+    }
+
+    return {
+      successCount: vehiclesToCreate.length,
+      failureCount: errors.length,
+      errors: errors,
+    };
+  };
 
   getVehicleProfile = async ({ vin, companyId }, option = null) => {
     if (!vin) {
@@ -188,7 +327,12 @@ class VehicleService {
     });
   };
 
-  findVehicleByVinWithWarranty = async ({ vin, companyId, odometer }) => {
+  findVehicleByVinWithWarranty = async ({
+    vin,
+    companyId,
+    odometer,
+    categories,
+  }) => {
     const existingVehicle =
       await this.#vehicleRepository.findVehicleWithTypeComponentByVin({
         vin: vin,
@@ -199,10 +343,13 @@ class VehicleService {
       throw new NotFoundError("Vehicle not found");
     }
 
+    const categoryFilter = this.#normalizeCategories(categories);
+
     const vehicleWithWarranty = this.#checkWarrantyForVehicle({
       vehicle: existingVehicle,
       odometer,
       purchaseDate: dayjs(existingVehicle.purchaseDate),
+      categories: categoryFilter,
     });
 
     return vehicleWithWarranty;
@@ -213,6 +360,7 @@ class VehicleService {
     companyId,
     odometer,
     purchaseDate,
+    categories,
   }) => {
     const purchaseDateFormatted = dayjs(purchaseDate);
 
@@ -233,10 +381,13 @@ class VehicleService {
       throw new NotFoundError("Vehicle not found");
     }
 
+    const categoryFilter = this.#normalizeCategories(categories);
+
     const vehicleWithWarranty = this.#checkWarrantyForVehicle({
       vehicle: existingVehicle,
       odometer,
       purchaseDate: purchaseDateFormatted,
+      categories: categoryFilter,
     });
 
     return vehicleWithWarranty;
@@ -297,7 +448,7 @@ class VehicleService {
     return { valid: true };
   }
 
-  #checkWarrantyForVehicle({ vehicle, odometer, purchaseDate }) {
+  #checkWarrantyForVehicle({ vehicle, odometer, purchaseDate, categories }) {
     const vehicleModel = vehicle?.model;
 
     const generalWarrantyDurationFormated = this.#checkWarrantyStatusByDuration(
@@ -320,65 +471,76 @@ class VehicleService {
 
     const typeComponents = vehicle?.model?.typeComponents || [];
 
-    const typeComponentsWarrantyFormated = typeComponents.map((component) => {
-      const warrantyComponent = component?.WarrantyComponent;
+    const filteredComponents =
+      Array.isArray(categories) && categories.length
+        ? typeComponents.filter((component) =>
+            categories.includes(component?.category)
+          )
+        : typeComponents;
 
-      if (!warrantyComponent) {
+    const typeComponentsWarrantyFormated = filteredComponents.map(
+      (component) => {
+        const warrantyComponent = component?.WarrantyComponent;
+
+        if (!warrantyComponent) {
+          return {
+            typeComponentId: component.typeComponentId,
+            componentName: component.name,
+            category: component.category || null,
+            policy: {
+              durationMonths: 0,
+              mileageLimit: 0,
+            },
+            duration: {
+              status: "EXPIRED",
+              endDate: null,
+              remainingDays: 0,
+              overdueDays: 0,
+            },
+            mileage: {
+              status: "EXPIRED",
+              remainingMileage: 0,
+              overdueMileage: 0,
+            },
+          };
+        }
+
+        const checkWarrantyComponent = this.#checkWarrantyStatusByDuration(
+          purchaseDate,
+          warrantyComponent.durationMonth
+        );
+
+        const checkWarrantyByMileage = this.#checkWarrantyStatusByMileage(
+          warrantyComponent.mileageLimit,
+          odometer
+        );
+
         return {
           typeComponentId: component.typeComponentId,
           componentName: component.name,
+          category: component.category || null,
           policy: {
-            durationMonths: 0,
-            mileageLimit: 0,
+            durationMonths: warrantyComponent.durationMonth,
+            mileageLimit: warrantyComponent.mileageLimit,
           },
           duration: {
-            status: "EXPIRED",
-            endDate: null,
-            remainingDays: 0,
-            overdueDays: 0,
+            status: checkWarrantyComponent.status,
+
+            endDate: checkWarrantyComponent.endDate,
+
+            remainingDays: checkWarrantyComponent?.remainingDays ?? 0,
+
+            overdueDays: checkWarrantyComponent?.overdueDays ?? 0,
           },
           mileage: {
-            status: "EXPIRED",
-            remainingMileage: 0,
-            overdueMileage: 0,
+            status: checkWarrantyByMileage?.status,
+            remainingMileage: checkWarrantyByMileage?.remainingMileage ?? 0,
+
+            overdueMileage: checkWarrantyByMileage?.overdueMileage ?? 0,
           },
         };
       }
-
-      const checkWarrantyComponent = this.#checkWarrantyStatusByDuration(
-        purchaseDate,
-        warrantyComponent.durationMonth
-      );
-
-      const checkWarrantyByMileage = this.#checkWarrantyStatusByMileage(
-        warrantyComponent.mileageLimit,
-        odometer
-      );
-
-      return {
-        typeComponentId: component.typeComponentId,
-        componentName: component.name,
-        policy: {
-          durationMonths: warrantyComponent.durationMonth,
-          mileageLimit: warrantyComponent.mileageLimit,
-        },
-        duration: {
-          status: checkWarrantyComponent.status,
-
-          endDate: checkWarrantyComponent.endDate,
-
-          remainingDays: checkWarrantyComponent?.remainingDays ?? 0,
-
-          overdueDays: checkWarrantyComponent?.overdueDays ?? 0,
-        },
-        mileage: {
-          status: checkWarrantyByMileage?.status,
-          remainingMileage: checkWarrantyByMileage?.remainingMileage ?? 0,
-
-          overdueMileage: checkWarrantyByMileage?.overdueMileage ?? 0,
-        },
-      };
-    });
+    );
 
     const formatVehicle = {
       vin: vehicle?.vin,
@@ -458,6 +620,33 @@ class VehicleService {
         remainingMileage: remainingMileage,
       };
     }
+  }
+
+  #normalizeCategories(categories) {
+    if (!categories) {
+      return null;
+    }
+
+    const list = Array.isArray(categories) ? categories : [categories];
+    const normalized = [];
+
+    for (const item of list) {
+      if (typeof item !== "string") {
+        continue;
+      }
+
+      const value = item.trim().toUpperCase();
+
+      if (!TYPE_COMPONENT_CATEGORY_SET.has(value)) {
+        continue;
+      }
+
+      if (!normalized.includes(value)) {
+        normalized.push(value);
+      }
+    }
+
+    return normalized.length > 0 ? normalized : null;
   }
 }
 

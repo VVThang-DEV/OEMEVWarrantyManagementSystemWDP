@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { Transaction } from "sequelize";
 import db from "../models/index.cjs";
 import {
@@ -94,8 +95,6 @@ class InventoryService {
       if (filters?.serviceCenterId) {
         warehouseWhere.serviceCenterId = filters.serviceCenterId;
       }
-    } else if (serviceCenterId) {
-      warehouseWhere.serviceCenterId = serviceCenterId;
     }
 
     const limitParse = Number.parseInt(limit, 10) || 10;
@@ -124,11 +123,214 @@ class InventoryService {
     return components;
   };
 
+  createBulkAdjustments = async (adjustmentData) => {
+    const {
+      warehouseId,
+      adjustmentType,
+      reason,
+      note,
+      componentsBySku,
+      adjustedByUserId,
+      roleName,
+      companyId,
+    } = adjustmentData;
+
+    const results = await db.sequelize.transaction(async (transaction) => {
+      const adjustments = [];
+      for (const sku in componentsBySku) {
+        const components = componentsBySku[sku];
+        const stock = await this.#warehouseRepository.findStockBySku(
+          sku,
+          warehouseId,
+          transaction
+        );
+
+        if (!stock) {
+          throw new NotFoundError(
+            `Stock item with SKU ${sku} not found in warehouse ${warehouseId}`
+          );
+        }
+
+        const result = await this.#performAdjustment({
+          stockId: stock.stockId,
+          adjustmentType,
+          reason,
+          note,
+          components,
+          adjustedByUserId,
+          roleName,
+          companyId,
+          transaction,
+        });
+        adjustments.push(result);
+      }
+      return adjustments;
+    });
+
+    const stockIds = Array.from(
+      new Set(
+        results.map((result) => result?.updatedStock?.stockId).filter(Boolean)
+      )
+    );
+
+    if (stockIds.length > 0) {
+      await this.emitLowStockAlerts({ stockIds });
+    }
+
+    return results;
+  };
+
+  async #performAdjustment({
+    stockId,
+    adjustmentType,
+    reason,
+    note,
+    components,
+    adjustedByUserId,
+    roleName,
+    companyId,
+    transaction,
+  }) {
+    const stock = await this.#warehouseRepository.findStockByStockId(
+      stockId,
+      transaction,
+      Transaction.LOCK.UPDATE
+    );
+
+    if (!stock) throw new NotFoundError("Stock item not found");
+
+    const existingUser = await this.#userRepository.findUserById(
+      { userId: adjustedByUserId },
+      transaction,
+      Transaction.LOCK.SHARE
+    );
+
+    if (!existingUser) throw new NotFoundError("Adjusting user not found");
+
+    let quantity = components.length;
+
+    if (quantity === 0) {
+      throw new BadRequestError("Components list cannot be empty.");
+    }
+
+    const serialNumbers = components.map((c) => c.serialNumber);
+
+    if (adjustmentType === "IN") {
+      const existingComponents =
+        await this.#componentRepository.findBySerialNumbers(
+          serialNumbers,
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+      if (existingComponents.length > 0) {
+        throw new ConflictError(
+          `Serial numbers already exist: ${existingComponents
+            .map((c) => c.serialNumber)
+            .join(", ")}`
+        );
+      }
+
+      const componentsToCreate = components.map((c) => ({
+        ...c,
+        typeComponentId: stock.typeComponentId,
+        warehouseId: stock.warehouseId,
+        status: "IN_STOCK",
+      }));
+      await this.#componentRepository.bulkCreate(
+        componentsToCreate,
+        transaction
+      );
+    } else if (adjustmentType === "OUT") {
+      if (stock.quantityAvailable < quantity) {
+        throw new ConflictError(
+          `Insufficient available stock. Available: ${stock.quantityAvailable}, Requested: ${quantity}`
+        );
+      }
+      const componentsToUpdate =
+        await this.#componentRepository.findBySerialNumbers(
+          serialNumbers,
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+
+      if (componentsToUpdate.length !== quantity) {
+        const foundSerials = componentsToUpdate.map((c) => c.serialNumber);
+        const notFoundSerials = serialNumbers.filter(
+          (sn) => !foundSerials.includes(sn)
+        );
+        throw new NotFoundError(
+          `Components with these serial numbers not found: ${notFoundSerials.join(
+            ", "
+          )}`
+        );
+      }
+
+      for (const component of componentsToUpdate) {
+        if (component.status !== "IN_STOCK") {
+          throw new ConflictError(
+            `Component with serial number ${component.serialNumber} is not in stock. Current status: ${component.status}`
+          );
+        }
+      }
+
+      await this.#componentRepository.updateComponentStatusBySerialNumbers(
+        serialNumbers,
+        "REMOVED",
+        transaction
+      );
+    }
+
+    const newAdjustment =
+      await this.#inventoryAdjustmentRepository.createInventoryAdjustment(
+        { stockId, adjustmentType, quantity, reason, note, adjustedByUserId },
+        transaction
+      );
+
+    const newQuantityInStock =
+      adjustmentType === "IN"
+        ? stock.quantityInStock + quantity
+        : stock.quantityInStock - quantity;
+
+    const updatedStock = await this.#warehouseRepository.updateStockQuantities(
+      { stockId, quantityInStock: newQuantityInStock },
+      transaction
+    );
+
+    const result = { adjustment: newAdjustment, updatedStock, stock, quantity };
+
+    if (roleName === "parts_coordinator_company" && companyId) {
+      this.#notificationService.sendToRoom(
+        `parts_coordinator_company_${companyId}`,
+        "inventory_adjustment_created",
+        {
+          adjustment: newAdjustment,
+          updatedStock,
+          adjustmentType,
+          quantity,
+          reason,
+        }
+      );
+    } else if (stock.warehouse?.serviceCenterId) {
+      this.#notificationService.sendToRoom(
+        `parts_coordinator_service_center_${stock.warehouse.serviceCenterId}`,
+        "inventory_adjustment_created",
+        {
+          adjustment: newAdjustment,
+          updatedStock,
+          adjustmentType,
+          quantity,
+          reason,
+        }
+      );
+    }
+
+    return result;
+  }
+
   createInventoryAdjustment = async (adjustmentData) => {
     const {
       stockId,
       adjustmentType,
-      quantity: inputQuantity,
       components,
       reason,
       note,
@@ -138,112 +340,26 @@ class InventoryService {
     } = adjustmentData;
 
     const result = await db.sequelize.transaction(async (transaction) => {
-      const stock = await this.#warehouseRepository.findStockByStockId(
+      return this.#performAdjustment({
         stockId,
+        adjustmentType,
+        reason,
+        note,
+        components,
+        adjustedByUserId,
+        roleName,
+        companyId,
         transaction,
-        Transaction.LOCK.UPDATE
-      );
-      if (!stock) throw new NotFoundError("Stock item not found");
-
-      const existingUser = await this.#userRepository.findUserById(
-        { userId: adjustedByUserId },
-        transaction,
-        Transaction.LOCK.SHARE
-      );
-      if (!existingUser) throw new NotFoundError("Adjusting user not found");
-
-      let quantity = 0;
-      if (adjustmentType === "IN") {
-        if (!components || components.length === 0) {
-          throw new BadRequestError(
-            "Components list is required for IN adjustment"
-          );
-        }
-        quantity = components.length;
-
-        const serialNumbers = components.map((c) => c.serialNumber);
-        const existingComponents =
-          await this.#componentRepository.findBySerialNumbers(
-            serialNumbers,
-            transaction,
-            Transaction.LOCK.UPDATE
-          );
-        if (existingComponents.length > 0) {
-          throw new ConflictError(
-            `Serial numbers already exist: ${existingComponents
-              .map((c) => c.serialNumber)
-              .join(", ")}`
-          );
-        }
-
-        const componentsToCreate = components.map((c) => ({
-          ...c,
-          typeComponentId: stock.typeComponentId,
-          warehouseId: stock.warehouseId,
-          status: "IN_STOCK",
-        }));
-        await this.#componentRepository.bulkCreate(
-          componentsToCreate,
-          transaction
-        );
-      } else if (adjustmentType === "OUT") {
-        quantity = inputQuantity;
-        if (stock.quantityAvailable < quantity) {
-          throw new ConflictError(
-            `Insufficient available stock. Available: ${stock.quantityAvailable}, Requested: ${quantity}`
-          );
-        }
-      }
-
-      const newAdjustment =
-        await this.#inventoryAdjustmentRepository.createInventoryAdjustment(
-          { stockId, adjustmentType, quantity, reason, note, adjustedByUserId },
-          transaction
-        );
-
-      const newQuantityInStock =
-        adjustmentType === "IN"
-          ? stock.quantityInStock + quantity
-          : stock.quantityInStock - quantity;
-
-      const updatedStock =
-        await this.#warehouseRepository.updateStockQuantities(
-          { stockId, quantityInStock: newQuantityInStock },
-          transaction
-        );
-
-      return { adjustment: newAdjustment, updatedStock, stock, quantity };
+      });
     });
 
-    const { adjustment, updatedStock, stock, quantity: TXQuantity } = result;
+    const updatedStockId = result?.updatedStock?.stockId;
 
-    if (roleName === "parts_coordinator_company" && companyId) {
-      this.#notificationService.sendToRoom(
-        `parts_coordinator_company_${companyId}`,
-        "inventory_adjustment_created",
-        {
-          adjustment,
-          updatedStock,
-          adjustmentType,
-          quantity: TXQuantity,
-          reason,
-        }
-      );
-    } else if (stock.warehouse?.serviceCenterId) {
-      this.#notificationService.sendToRoom(
-        `parts_coordinator_service_center_${stock.warehouse.serviceCenterId}`,
-        "inventory_adjustment_created",
-        {
-          adjustment,
-          updatedStock,
-          adjustmentType,
-          quantity: TXQuantity,
-          reason,
-        }
-      );
+    if (updatedStockId) {
+      await this.emitLowStockAlerts({ stockIds: [updatedStockId] });
     }
 
-    return { adjustment, updatedStock };
+    return result;
   };
 
   getInventoryAdjustments = async ({
@@ -345,68 +461,49 @@ class InventoryService {
 
   getStockHistory = async ({ stockId, page = 1, limit = 20 }) => {
     const stock = await this.#warehouseRepository.findStockByStockId(stockId);
-    if (!stock) {
-      throw new NotFoundError("Stock item not found");
-    }
+    if (!stock) throw new NotFoundError("Stock item not found");
 
-    const pageParse = parseInt(page, 10);
-    const limitParse = parseInt(limit, 10);
+    const size = Math.max(parseInt(limit, 10) || 20, 1);
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const offset = (pageNumber - 1) * size;
 
-    const [adjustments, reservations] = await Promise.all([
-      this.#inventoryAdjustmentRepository.findAllAndCount({
+    const { rows: adjustments, count } =
+      await this.#inventoryAdjustmentRepository.findAllAndCount({
         where: { stockId },
-      }),
+        limit: size,
+        offset,
+      });
 
-      this.#stockReservationRepository.findAll({ where: { stockId } }),
-    ]);
-
-    const normalizedAdjustments = adjustments.rows.map((adj) => ({
-      eventType: `ADJUSTMENT_${adj.adjustmentType}`,
-      quantityChange:
-        adj.adjustmentType === "IN" ? adj.quantity : -adj.quantity,
-      eventDate: adj.adjustedAt,
-      details: adj,
-    }));
-
-    const reservationAdjustments = {
-      RESERVED: -1,
-      SHIPPED: -1,
-      IN_TRANSIT: -1,
-      INSTALLED: -1,
-      PICKED_UP: -1,
-      COMPLETED: -1,
-      CANCELLED: 1,
-      RELEASED: 1,
-      RETURNED: 1,
-    };
-
-    const normalizedReservations = reservations.map((res) => {
-      const multiplier = reservationAdjustments[res.status] ?? 0;
+    const history = adjustments.map((adj) => {
+      const adjustment = adj.toJSON ? adj.toJSON() : adj;
+      const change =
+        adjustment.adjustmentType === "IN"
+          ? adjustment.quantity
+          : -adjustment.quantity;
 
       return {
-        eventType: `RESERVATION_${res.status}`,
-        quantityChange: multiplier * res.quantityReserved,
-        eventDate: res.updatedAt,
-        details: res,
+        ...adjustment,
+        eventType: "INVENTORY_ADJUSTMENT",
+        quantityChange: change,
+        adjustedBy: adjustment.adjustedByUser ?? adjustment.adjustedBy ?? null,
       };
     });
 
-    const fullHistory = [...normalizedAdjustments, ...normalizedReservations];
-
-    fullHistory.sort((a, b) => new Date(b.eventDate) - new Date(a.eventDate));
-
-    const offset = (pageParse - 1) * limitParse;
-    const paginatedItems = fullHistory.slice(offset, offset + limitParse);
-    const totalItems = fullHistory.length;
-    const totalPages = Math.ceil(totalItems / limitParse);
-
     return {
-      history: paginatedItems,
+      stock: {
+        stockId: stock.stockId,
+        warehouseId: stock.warehouseId,
+        typeComponentId: stock.typeComponentId,
+        quantityInStock: stock.quantityInStock,
+        quantityReserved: stock.quantityReserved,
+        quantityAvailable: stock.quantityAvailable,
+      },
+      history,
       pagination: {
-        currentPage: pageParse,
-        totalPages,
-        totalItems,
-        itemsPerPage: limitParse,
+        currentPage: pageNumber,
+        totalPages: Math.ceil(count / size),
+        totalItems: count,
+        itemsPerPage: size,
       },
     };
   };
@@ -451,10 +548,36 @@ class InventoryService {
       return [];
     }
 
+    const cooldownHours = 2;
+    const now = dayjs();
+
+    const eligibleStocks = belowStockItems.filter((stock) => {
+      if (!stock.lowStockNotifiedAt) {
+        return true;
+      }
+
+      const lowStockMoment = dayjs(stock.lowStockNotifiedAt);
+      const hoursSince = now.diff(lowStockMoment, "hour", true);
+
+      const updatedAt = stock.updatedAt ? dayjs(stock.updatedAt) : null;
+      const isFreshAlert =
+        updatedAt && lowStockMoment.isSame(updatedAt, "second");
+
+      if (isFreshAlert) {
+        return true;
+      }
+
+      return hoursSince >= cooldownHours;
+    });
+
+    if (eligibleStocks.length === 0) {
+      return [];
+    }
+
     const stocksByServiceCenter = new Map();
     const stocksByCompany = new Map();
 
-    for (const stock of belowStockItems) {
+    for (const stock of eligibleStocks) {
       const { warehouse } = stock;
 
       if (warehouse?.serviceCenterId) {
@@ -486,7 +609,7 @@ class InventoryService {
       });
     }
 
-    return belowStockItems;
+    return eligibleStocks;
   };
 }
 

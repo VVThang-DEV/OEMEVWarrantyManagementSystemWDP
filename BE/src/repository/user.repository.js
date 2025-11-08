@@ -32,6 +32,16 @@ class UserRepository {
     return existingUser.toJSON();
   }
 
+  async findUsersByEmployeeCodes(employeeCodes, transaction = null) {
+    const users = await User.findAll({
+      where: {
+        employeeCode: employeeCodes,
+      },
+      transaction,
+    });
+    return users.map((user) => user.toJSON());
+  }
+
   async getAllTechnicians({ status, serviceCenterId }) {
     const today = dayjs().format("YYYY-MM-DD");
 
@@ -146,12 +156,13 @@ class UserRepository {
 
   createUser = async ({
     username,
-    password: hashedPassword,
+    password,
     email,
     phone,
     address,
     name,
     roleId,
+    employeeCode,
     serviceCenterId,
     vehicleCompanyId,
   }) => {
@@ -163,6 +174,7 @@ class UserRepository {
       address,
       name,
       roleId,
+      employeeCode,
       serviceCenterId,
       vehicleCompanyId,
     });

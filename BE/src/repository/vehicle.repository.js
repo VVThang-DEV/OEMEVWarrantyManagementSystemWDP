@@ -10,6 +10,25 @@ const {
 } = db;
 
 class VehicleRepository {
+  findAllByVins = async (vins, transaction = null) => {
+    const vehicles = await Vehicle.findAll({
+      where: {
+        vin: vins,
+      },
+      attributes: ["vin"],
+      transaction,
+    });
+    return vehicles.map((v) => v.toJSON());
+  };
+
+  bulkCreate = async (vehicles, transaction = null) => {
+    const newVehicles = await Vehicle.bulkCreate(vehicles, {
+      transaction,
+      ignoreDuplicates: false,
+    });
+    return newVehicles;
+  };
+
   findByVinAndCompany = async (
     { vin, companyId },
     option = null,
@@ -116,7 +135,7 @@ class VehicleRepository {
             {
               model: TypeComponent,
               as: "typeComponents",
-              attributes: ["typeComponentId", "name"],
+              attributes: ["typeComponentId", "name", "category"],
               through: { attributes: ["durationMonth", "mileageLimit"] },
             },
 
