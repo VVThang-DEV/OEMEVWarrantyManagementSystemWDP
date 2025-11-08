@@ -30,6 +30,7 @@ import WarrantyComponentRepository from "./src/repository/warrantyComponent.repo
 import TypeComponentRepository from "./src/repository/typeComponent.repository.js";
 import RecallRepository from "./src/repository/recall.repository.js";
 import RoleRepository from "./src/repository/role.repository.js";
+import ServiceCenterRepository from "./src/repository/serviceCenter.repository.js";
 
 // Import services
 import UserService from "./src/service/user.service.js";
@@ -52,6 +53,7 @@ import TaskAssignmentService from "./src/service/taskAssignment.service.js";
 import OemVehicleModelService from "./src/service/oemVehicleModel.service.js";
 import RecallService from "./src/service/recall.service.js";
 import RoleService from "./src/service/role.service.js";
+import ServiceCenterService from "./src/service/serviceCenter.service.js";
 
 // Import controllers
 import AuthController from "./src/api/controller/auth.controller.js";
@@ -158,6 +160,9 @@ export const setupContainer = (socket) => {
     roleRepository: asClass(RoleRepository, {
       lifetime: Lifetime.SINGLETON,
     }),
+    serviceCenterRepository: asClass(ServiceCenterRepository, {
+      lifetime: Lifetime.SINGLETON,
+    }),
 
     // Services
     userService: asClass(UserService, { lifetime: Lifetime.SINGLETON }),
@@ -206,6 +211,9 @@ export const setupContainer = (socket) => {
       lifetime: Lifetime.SINGLETON,
     }),
     roleService: asClass(RoleService, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    serviceCenterService: asClass(ServiceCenterService, {
       lifetime: Lifetime.SINGLETON,
     }),
 
