@@ -1,14 +1,28 @@
-import { AuthenticationError } from "../error/index.js";
+import { Transaction } from "sequelize";
+import {
+  AuthenticationError,
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from "../error/index.js";
+import db from "../models/index.cjs";
 
 class AuthService {
   #userRepository;
   #hashService;
   #tokenService;
+  #serviceCenterRepository;
 
-  constructor({ userRepository, hashService, tokenService }) {
+  constructor({
+    userRepository,
+    hashService,
+    tokenService,
+    serviceCenterRepository,
+  }) {
     this.#userRepository = userRepository;
     this.#hashService = hashService;
     this.#tokenService = tokenService;
+    this.#serviceCenterRepository = serviceCenterRepository;
   }
 
   login = async ({ username, password }) => {
@@ -39,7 +53,7 @@ class AuthService {
     return token;
   };
 
-  register = async ({
+  registerAccount = async ({
     username,
     password,
     email,
@@ -47,6 +61,7 @@ class AuthService {
     address,
     name,
     roleId,
+    employeeCode,
     serviceCenterId,
     vehicleCompanyId,
   }) => {
@@ -55,24 +70,86 @@ class AuthService {
     });
 
     if (existingUser) {
-      throw new Error("Username already exists");
+      throw new ConflictError("Username already exists");
     }
 
-    const hashedPassword = await this.#tokenService.hash({ string: password });
+    if (!employeeCode || typeof employeeCode !== "string") {
+      throw new BadRequestError("employeeCode is required");
+    }
 
-    const newUser = await this.#userRepository.createUser({
-      username,
-      password: hashedPassword,
-      email,
-      phone,
-      address,
-      name,
-      roleId,
-      serviceCenterId,
-      vehicleCompanyId,
+    const normalizedEmployeeCode = employeeCode.trim();
+
+    if (!normalizedEmployeeCode) {
+      throw new BadRequestError("employeeCode cannot be empty");
+    }
+
+    const existingEmployeeCodes = await this.#userRepository
+      .findUsersByEmployeeCodes([normalizedEmployeeCode])
+      .catch(() => []);
+
+    if (existingEmployeeCodes && existingEmployeeCodes.length > 0) {
+      throw new ConflictError("employeeCode already exists");
+    }
+
+    const hashedPassword = await this.#hashService.hash({ string: password });
+
+    if (serviceCenterId && vehicleCompanyId) {
+      throw new BadRequestError(
+        "Provide either serviceCenterId or vehicleCompanyId, not both"
+      );
+    }
+
+    if (!serviceCenterId && !vehicleCompanyId) {
+      throw new BadRequestError(
+        "serviceCenterId or vehicleCompanyId must be provided"
+      );
+    }
+
+    const newUser = await db.sequelize.transaction(async (transaction) => {
+      if (serviceCenterId) {
+        const serviceCenter =
+          await this.#serviceCenterRepository.findServiceCenterById(
+            {
+              serviceCenterId,
+            },
+            transaction,
+            Transaction.LOCK.SHARE
+          );
+
+        if (!serviceCenter) {
+          throw new NotFoundError("Service Center not found");
+        }
+
+        return this.#userRepository.createUser({
+          username,
+          password: hashedPassword,
+          email,
+          phone,
+          address,
+          name,
+          roleId,
+          employeeCode,
+          employeeCode: normalizedEmployeeCode,
+          serviceCenterId,
+        });
+      }
+
+      return this.#userRepository.createUser({
+        username,
+        password: hashedPassword,
+        email,
+        phone,
+        address,
+        name,
+        roleId,
+        employeeCode: normalizedEmployeeCode,
+        vehicleCompanyId,
+      });
     });
 
-    return newUser.toJSON();
+    const { password: _password, ...userWithoutPassword } = newUser || {};
+
+    return userWithoutPassword;
   };
 }
 

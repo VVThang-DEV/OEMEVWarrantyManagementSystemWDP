@@ -7,6 +7,7 @@ class OemVehicleModelController {
   createVehicleModel = async (req, res) => {
     const {
       vehicleModelName,
+      sku,
       yearOfLaunch,
       placeOfManufacture,
       generalWarrantyDuration,
@@ -17,6 +18,7 @@ class OemVehicleModelController {
 
     const result = await this.#oemVehicleModelService.createVehicleModel({
       vehicleModelName,
+      sku,
       yearOfLaunch,
       placeOfManufacture,
       generalWarrantyDuration,

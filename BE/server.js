@@ -6,7 +6,7 @@ import { initializeSocket } from "./src/socket/socket.js";
 import { setupContainer } from "./container.js";
 configDotenv();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 const server = http.createServer(app);
 
 const { io, notificationNamespace, chatNamespace } = initializeSocket(server);
@@ -20,7 +20,7 @@ db.sequelize
   // .sync({ force: true })
   .then(() => {
     console.log("Connect DB succesfull");
-    server.listen(PORT, () => {
+    server.listen(PORT || 3000, () => {
       console.log(`Server is running on ${PORT}`);
     });
   })

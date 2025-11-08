@@ -155,6 +155,7 @@ const VEHICLE_MODELS_DATA = [
   {
     key: "vfE34",
     vehicleModelName: "VF e34",
+    sku: "VFE34-STD-2021",
     yearOfLaunch: new Date("2021-12-01"),
     generalWarrantyDuration: 60,
     generalWarrantyMileage: 120000,
@@ -162,6 +163,7 @@ const VEHICLE_MODELS_DATA = [
   {
     key: "vf8",
     vehicleModelName: "VF 8",
+    sku: "VF8-STD-2022",
     yearOfLaunch: new Date("2022-10-01"),
     generalWarrantyDuration: 120,
     generalWarrantyMileage: 200000,
@@ -169,6 +171,7 @@ const VEHICLE_MODELS_DATA = [
   {
     key: "vf9",
     vehicleModelName: "VF 9",
+    sku: "VF9-PLUS-2023",
     yearOfLaunch: new Date("2023-03-01"),
     generalWarrantyDuration: 120,
     generalWarrantyMileage: 200000,
@@ -436,15 +439,16 @@ async function seedDatabase() {
 
     const vehicleModels = {};
     for (const data of VEHICLE_MODELS_DATA) {
+      const { key, ...modelDefaults } = data;
       const [record] = await VehicleModel.findOrCreate({
-        where: { vehicleModelName: data.vehicleModelName },
+        where: { vehicleModelName: modelDefaults.vehicleModelName },
         defaults: {
-          ...data,
+          ...modelDefaults,
           vehicleCompanyId: vehicleCompany.vehicleCompanyId,
         },
         transaction,
       });
-      vehicleModels[data.key] = record;
+      vehicleModels[key] = record;
     }
 
     const serviceCenters = {};
@@ -659,6 +663,10 @@ async function seedDatabase() {
     ];
 
     for (const [index, user] of userPayload.entries()) {
+      const employeeCode = user.employeeCode
+        ? user.employeeCode
+        : `EMP${String(index + 1).padStart(4, "0")}`;
+
       await User.findOrCreate({
         where: { username: user.username },
         defaults: {
@@ -668,6 +676,7 @@ async function seedDatabase() {
           email: `${user.username}@vinfast.vn`,
           phone: `0907${String(index + 1).padStart(4, "0")}`,
           address: user.serviceCenterId ? "Trung tâm dịch vụ" : "Trụ sở chính",
+          employeeCode,
           roleId: roles[user.role].roleId,
           serviceCenterId: user.serviceCenterId ?? null,
           vehicleCompanyId: user.vehicleCompanyId ?? null,
@@ -727,7 +736,7 @@ async function seedDatabase() {
               typeComponentId: componentRecord.typeComponentId,
               serialNumber,
               warehouseId: warehouse.warehouseId,
-              status: "IN_WAREHOUSE",
+              status: "IN_STOCK",
             },
             transaction,
           });
@@ -737,7 +746,7 @@ async function seedDatabase() {
           where: {
             warehouseId: warehouse.warehouseId,
             typeComponentId: componentRecord.typeComponentId,
-            status: "IN_WAREHOUSE",
+            status: "IN_STOCK",
           },
           transaction,
         });
@@ -804,7 +813,7 @@ async function seedDatabase() {
     console.log(`   • Components trong kho: ${createdComponentsInWarehouses}`);
     console.log(`   • Components đã lắp trên xe: ${installedComponents}`);
     console.log(
-      "   • Mỗi Stock.quantityInStock đã khớp với số component IN_WAREHOUSE tương ứng."
+      "   • Mỗi Stock.quantityInStock đã khớp với số component IN_STOCK tương ứng."
     );
   } catch (error) {
     await transaction.rollback();

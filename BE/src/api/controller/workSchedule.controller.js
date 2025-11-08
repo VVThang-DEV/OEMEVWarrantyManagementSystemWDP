@@ -1,7 +1,40 @@
+import * as XLSX from "xlsx";
+
 class WorkScheduleController {
   constructor({ workScheduleService }) {
     this.workScheduleService = workScheduleService;
   }
+
+  getBulkCreateTemplate = async (req, res, next) => {
+    try {
+      const templateRows = [
+        ["employee_code", "work_date", "status", "notes"],
+        ["NV001", "2025-12-20", "AVAILABLE", "Trực buổi sáng"],
+        ["NV002", "2025-12-20", "UNAVAILABLE", "Nghỉ phép"],
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Schedules");
+
+      const buffer = XLSX.write(workbook, {
+        type: "buffer",
+        bookType: "xlsx",
+      });
+
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=schedules_bulk_create_template.xlsx"
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.status(200).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  };
 
   uploadSchedules = async (req, res, next) => {
     if (!req.file) {

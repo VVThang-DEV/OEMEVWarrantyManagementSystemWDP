@@ -7,7 +7,7 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024, // 5MB
   },
   fileFilter: (req, file, cb) => {
     if (
@@ -24,11 +24,50 @@ const upload = multer({
 
 /**
  * @swagger
- * /work-schedules/upload:
+ * /work-schedules/bulk-create-template:
+ *   get:
+ *     summary: Tải file Excel mẫu để tạo lịch làm việc
+ *     description: >-
+ *       Tải về một file Excel mẫu chứa các cột cần thiết (`employee_code`, `work_date`, `status`, `notes`)
+ *       để sử dụng cho việc tạo lịch làm việc hàng loạt.
+ *       Yêu cầu quyền `service_center_manager`.
+ *     tags: [Work Schedule]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: File Excel mẫu.
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Chưa xác thực.
+ *       403:
+ *         description: Không có quyền.
+ */
+router.get(
+  "/bulk-create-template",
+  authentication,
+  authorizationByRole(["service_center_manager"]),
+  async (req, res, next) => {
+    const workScheduleController = req.container.resolve(
+      "workScheduleController"
+    );
+    await workScheduleController.getBulkCreateTemplate(req, res, next);
+  }
+);
+
+/**
+ * @swagger
+ * /work-schedules/bulk-create:
  *   post:
- *     summary: Upload Excel file để import work schedules
- *     description: Manager upload file Excel để tạo lịch làm việc hàng loạt cho technicians
- *     tags: [WorkSchedule]
+ *     summary: Tạo lịch làm việc hàng loạt từ file Excel
+ *     description: >-
+ *       Quản lý (`service_center_manager`) tải lên file Excel để tạo hoặc cập nhật lịch làm việc hàng loạt cho các kỹ thuật viên.
+ *       Hệ thống sẽ xử lý file và trả về kết quả chi tiết.
+ *     tags: [Work Schedule]
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -37,25 +76,24 @@ const upload = multer({
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required:
- *               - file
+ *             required: [file]
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: File Excel chứa work schedules (.xlsx)
+ *                 description: File Excel chứa dữ liệu lịch làm việc.
  *     responses:
  *       200:
- *         description: Upload thành công
+ *         description: Xử lý file thành công (có thể có lỗi trong từng dòng).
  *       400:
- *         description: Lỗi validation hoặc file không hợp lệ
+ *         description: File không hợp lệ hoặc lỗi validation.
  *       401:
- *         description: Unauthorized
+ *         description: Chưa xác thực.
  *       403:
- *         description: Forbidden - Chỉ manager mới có quyền
+ *         description: Không có quyền (yêu cầu vai trò Quản lý).
  */
 router.post(
-  "/upload",
+  "/bulk-create",
   authentication,
   authorizationByRole(["service_center_manager"]),
   upload.single("file"),
@@ -71,51 +109,41 @@ router.post(
  * @swagger
  * /work-schedules:
  *   get:
- *     summary: Lấy danh sách work schedules
- *     description: Manager xem tất cả work schedules với filters
- *     tags: [WorkSchedule]
+ *     summary: Lấy danh sách lịch làm việc
+ *     description: >-
+ *       Quản lý (`service_center_manager`) lấy danh sách lịch làm việc với các bộ lọc.
+ *       Hệ thống sẽ tự động lọc theo trung tâm dịch vụ của quản lý.
+ *     tags: [Work Schedule]
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: startDate
- *         schema:
- *           type: string
- *           format: date
- *         description: Ngày bắt đầu (YYYY-MM-DD)
+ *         schema: { type: string, format: date }
+ *         description: Lọc từ ngày (YYYY-MM-DD).
  *       - in: query
  *         name: endDate
- *         schema:
- *           type: string
- *           format: date
- *         description: Ngày kết thúc (YYYY-MM-DD)
+ *         schema: { type: string, format: date }
+ *         description: Lọc đến ngày (YYYY-MM-DD).
  *       - in: query
  *         name: technicianId
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Lọc theo technician
+ *         schema: { type: string, format: uuid }
+ *         description: Lọc theo ID của kỹ thuật viên.
  *       - in: query
  *         name: status
- *         schema:
- *           type: string
- *           enum: [AVAILABLE, UNAVAILABLE]
- *         description: Lọc theo trạng thái
+ *         schema: { type: string, enum: [AVAILABLE, UNAVAILABLE] }
+ *         description: Lọc theo trạng thái.
  *       - in: query
  *         name: page
- *         schema:
- *           type: integer
- *           default: 1
+ *         schema: { type: integer, default: 1 }
  *       - in: query
  *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
+ *         schema: { type: integer, default: 10 }
  *     responses:
  *       200:
- *         description: Danh sách work schedules
+ *         description: Danh sách lịch làm việc.
  *       401:
- *         description: Unauthorized
+ *         description: Chưa xác thực.
  */
 router.get(
   "/",
@@ -133,27 +161,26 @@ router.get(
  * @swagger
  * /work-schedules/my-schedule:
  *   get:
- *     summary: Technician xem lịch làm việc của mình
- *     description: Technician xem work schedule cá nhân
- *     tags: [WorkSchedule]
+ *     summary: Kỹ thuật viên xem lịch làm việc của bản thân
+ *     description: >-
+ *       Kỹ thuật viên (`service_center_technician`) xem lịch làm việc cá nhân của mình.
+ *     tags: [Work Schedule]
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: startDate
- *         schema:
- *           type: string
- *           format: date
+ *         schema: { type: string, format: date }
+ *         description: Lọc từ ngày.
  *       - in: query
  *         name: endDate
- *         schema:
- *           type: string
- *           format: date
+ *         schema: { type: string, format: date }
+ *         description: Lọc đến ngày.
  *     responses:
  *       200:
- *         description: Work schedule của technician
+ *         description: Lịch làm việc của kỹ thuật viên.
  *       401:
- *         description: Unauthorized
+ *         description: Chưa xác thực.
  */
 router.get(
   "/my-schedule",
@@ -171,26 +198,26 @@ router.get(
  * @swagger
  * /work-schedules/available-technicians:
  *   get:
- *     summary: Lấy danh sách technicians available trong một ngày
- *     description: Manager kiểm tra technicians nào available để assign task
- *     tags: [WorkSchedule]
+ *     summary: Lấy danh sách kỹ thuật viên sẵn sàng làm việc
+ *     description: >-
+ *       Quản lý (`service_center_manager`) lấy danh sách các kỹ thuật viên có trạng thái `AVAILABLE` trong một ngày cụ thể
+ *       để phục vụ việc giao task.
+ *     tags: [Work Schedule]
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: workDate
  *         required: true
- *         schema:
- *           type: string
- *           format: date
- *         description: Ngày cần kiểm tra (YYYY-MM-DD)
+ *         schema: { type: string, format: date }
+ *         description: Ngày cần kiểm tra (YYYY-MM-DD).
  *     responses:
  *       200:
- *         description: Danh sách technicians available
+ *         description: Danh sách các kỹ thuật viên sẵn sàng.
  *       400:
- *         description: Thiếu workDate
+ *         description: Thiếu tham số `workDate`.
  *       401:
- *         description: Unauthorized
+ *         description: Chưa xác thực.
  */
 router.get(
   "/available-technicians",
@@ -208,18 +235,17 @@ router.get(
  * @swagger
  * /work-schedules/{scheduleId}:
  *   patch:
- *     summary: Cập nhật một work schedule
- *     description: Manager cập nhật status hoặc notes của schedule
- *     tags: [WorkSchedule]
+ *     summary: Cập nhật một lịch làm việc
+ *     description: >-
+ *       Quản lý (`service_center_manager`) cập nhật trạng thái hoặc ghi chú của một lịch làm việc cụ thể.
+ *     tags: [Work Schedule]
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: scheduleId
  *         required: true
- *         schema:
- *           type: string
- *           format: uuid
+ *         schema: { type: string, format: uuid }
  *     requestBody:
  *       required: true
  *       content:
@@ -234,13 +260,13 @@ router.get(
  *                 type: string
  *     responses:
  *       200:
- *         description: Cập nhật thành công
+ *         description: Cập nhật thành công.
  *       400:
- *         description: Dữ liệu không hợp lệ
+ *         description: Dữ liệu không hợp lệ.
  *       401:
- *         description: Unauthorized
+ *         description: Chưa xác thực.
  *       404:
- *         description: Schedule không tồn tại
+ *         description: Không tìm thấy lịch làm việc.
  */
 router.patch(
   "/:scheduleId",

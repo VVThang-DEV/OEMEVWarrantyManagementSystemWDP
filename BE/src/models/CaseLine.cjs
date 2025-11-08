@@ -90,6 +90,12 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: [],
         field: "evidence_image_urls",
       },
+
+      recallCampaignId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: "recall_campaign_id",
+      },
     },
     {
       tableName: "case_line",
@@ -125,6 +131,11 @@ module.exports = (sequelize, DataTypes) => {
     CaseLine.hasMany(models.ComponentReservation, {
       foreignKey: "case_line_id",
       as: "reservations",
+    });
+
+    CaseLine.belongsTo(models.RecallCampaign, {
+      foreignKey: "recall_campaign_id",
+      as: "recallCampaign",
     });
   };
 
