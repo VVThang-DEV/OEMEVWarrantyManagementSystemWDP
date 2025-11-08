@@ -19,6 +19,7 @@ class VehicleProcessingRecordService {
   #userRepository;
   #caselineRepository;
   #workScheduleRepository;
+  #vehicleService;
 
   constructor({
     vehicleProcessingRecordRepository,
@@ -29,6 +30,7 @@ class VehicleProcessingRecordService {
     taskAssignmentRepository,
     caselineRepository,
     workScheduleRepository,
+    vehicleService,
   }) {
     this.#vehicleProcessingRecordRepository = vehicleProcessingRecordRepository;
     this.#guaranteeCaseRepository = guaranteeCaseRepository;
@@ -38,6 +40,7 @@ class VehicleProcessingRecordService {
     this.#userRepository = userRepository;
     this.#caselineRepository = caselineRepository;
     this.#workScheduleRepository = workScheduleRepository;
+    this.#vehicleService = vehicleService;
   }
 
   createRecord = async ({
@@ -70,6 +73,40 @@ class VehicleProcessingRecordService {
       if (!existingVehicle?.owner) {
         throw new NotFoundError(
           `Vehicle with ${vin} does not have an owner, cannot create a record`
+        );
+      }
+
+      const warrantyStatus =
+        await this.#vehicleService.findVehicleByVinWithWarranty({
+          vin: vin,
+          companyId: companyId,
+          odometer: odometer,
+        });
+
+      const generalDurationStatus =
+        warrantyStatus?.generalWarranty?.duration?.status;
+      const generalMileageStatus =
+        warrantyStatus?.generalWarranty?.mileage?.status;
+
+      const hasGeneralWarranty =
+        generalDurationStatus === "ACTIVE" && generalMileageStatus === "ACTIVE";
+
+      let hasComponentWarranty = false;
+      const componentWarranties = warrantyStatus?.componentWarranties ?? [];
+
+      for (const componentWarranty of componentWarranties) {
+        const durationStatus = componentWarranty?.duration?.status;
+        const mileageStatus = componentWarranty?.mileage?.status;
+
+        if (durationStatus === "ACTIVE" && mileageStatus === "ACTIVE") {
+          hasComponentWarranty = true;
+          break;
+        }
+      }
+
+      if (!hasGeneralWarranty && !hasComponentWarranty) {
+        throw new ConflictError(
+          "Vehicle and all components are out of warranty, cannot create a record"
         );
       }
 
@@ -152,6 +189,171 @@ class VehicleProcessingRecordService {
     this.#notificationService.sendToRoom(room, event, payload);
 
     return formattedRecord;
+  };
+
+  cancelRecord = async ({
+    vehicleProcessingRecordId,
+    reason,
+    serviceCenterId,
+    roleName,
+    userId,
+  }) => {
+    const ALLOWED_RECORD_STATUSES = new Set([
+      "CHECKED_IN",
+      "IN_DIAGNOSIS",
+      "WAITING_CUSTOMER_APPROVAL",
+      "PROCESSING",
+    ]);
+
+    const PROHIBITED_CASELINE_STATUSES = new Set([
+      "READY_FOR_REPAIR",
+      "PARTS_AVAILABLE",
+      "IN_REPAIR",
+      "COMPLETED",
+    ]);
+
+    const FINAL_CASELINE_STATUSES = new Set([
+      "COMPLETED",
+      "CANCELLED",
+      "REJECTED_BY_OUT_OF_WARRANTY",
+      "REJECTED_BY_TECH",
+      "REJECTED_BY_CUSTOMER",
+    ]);
+
+    const rawResult = await db.sequelize.transaction(async (transaction) => {
+      const record =
+        await this.#vehicleProcessingRecordRepository.findDetailById(
+          {
+            id: vehicleProcessingRecordId,
+            roleName,
+            userId,
+            serviceCenterId,
+          },
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+
+      if (!record) {
+        throw new NotFoundError("Vehicle processing record not found");
+      }
+
+      if (record.status === "CANCELLED") {
+        throw new ConflictError("Record has already been cancelled");
+      }
+
+      if (
+        record.status === "READY_FOR_PICKUP" ||
+        record.status === "COMPLETED"
+      ) {
+        throw new ConflictError(
+          "Record cannot be cancelled once repair has been completed"
+        );
+      }
+
+      if (!ALLOWED_RECORD_STATUSES.has(record.status)) {
+        throw new ConflictError(
+          `Record with status ${record.status} cannot be cancelled`
+        );
+      }
+
+      const guaranteeCases = record.guaranteeCases || [];
+
+      const caseLineIdsToCancel = [];
+      const guaranteeCaseIds = [];
+
+      for (const guaranteeCase of guaranteeCases) {
+        if (guaranteeCase?.guaranteeCaseId) {
+          guaranteeCaseIds.push(guaranteeCase.guaranteeCaseId);
+        }
+
+        const caseLines = guaranteeCase?.caseLines || [];
+
+        for (const caseLine of caseLines) {
+          const status = caseLine?.status;
+
+          if (PROHIBITED_CASELINE_STATUSES.has(status)) {
+            throw new ConflictError(
+              `Cannot cancel record because caseline ${caseLine.id} is ${status}`
+            );
+          }
+
+          if (!FINAL_CASELINE_STATUSES.has(status)) {
+            caseLineIdsToCancel.push(caseLine.id);
+          }
+        }
+      }
+
+      let cancelledCaseLines = [];
+      if (caseLineIdsToCancel.length > 0) {
+        cancelledCaseLines =
+          await this.#caselineRepository.bulkUpdateStatusByIds(
+            {
+              caseLineIds: caseLineIdsToCancel,
+              status: "CANCELLED",
+            },
+            transaction,
+            Transaction.LOCK.UPDATE
+          );
+      }
+
+      let cancelledGuaranteeCases = [];
+      if (guaranteeCaseIds.length > 0) {
+        cancelledGuaranteeCases =
+          await this.#guaranteeCaseRepository.bulkUpdateStatus(
+            {
+              guaranteeCaseIds,
+              status: "CANCELLED",
+            },
+            transaction,
+            Transaction.LOCK.UPDATE
+          );
+      }
+
+      await this.#taskAssignmentRepository.cancelDiagnosisTaskByRecordId(
+        { vehicleProcessingRecordId },
+        transaction
+      );
+
+      const updatedRecord =
+        await this.#vehicleProcessingRecordRepository.updateStatus(
+          {
+            vehicleProcessingRecordId,
+            status: "CANCELLED",
+          },
+          transaction
+        );
+
+      return {
+        record: updatedRecord,
+        cancelledCaseLines,
+        cancelledGuaranteeCases,
+      };
+    });
+
+    const roomName = `service_center_staff_${serviceCenterId}`;
+    const eventName = "vehicleProcessingRecordStatusUpdated";
+    const notificationPayload = {
+      roomName,
+      record: rawResult.record,
+      status: "CANCELLED",
+      reason: reason ?? null,
+    };
+
+    await this.#notificationService.sendToRoom(
+      roomName,
+      eventName,
+      notificationPayload
+    );
+
+    return {
+      vehicleProcessingRecordId: rawResult.record.vehicleProcessingRecordId,
+      status: rawResult.record.status,
+      cancelledCaseLineIds: rawResult.cancelledCaseLines.map((cl) => cl.id),
+      cancelledGuaranteeCaseIds: rawResult.cancelledGuaranteeCases.map(
+        (gc) => gc.guaranteeCaseId
+      ),
+      reason: reason ?? null,
+    };
   };
 
   updateMainTechnician = async ({

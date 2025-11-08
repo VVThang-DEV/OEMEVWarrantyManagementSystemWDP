@@ -80,7 +80,7 @@ class InventoryAdjustmentRepository {
         },
         {
           model: User,
-          as: "adjustedByUser",
+          as: "adjustedBy",
           attributes: ["userId", "name", "email"],
         },
       ],

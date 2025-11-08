@@ -24,7 +24,7 @@ const options = {
         description: "Development server",
       },
       {
-        url: "https://api.oemevwarranty.com/api/v1",
+        url: "https://dongthanh.space",
         description: "Production server",
       },
     ],
@@ -320,7 +320,12 @@ const options = {
             },
             status: {
               type: "string",
-              enum: ["PENDING_ASSIGNMENT", "IN_DIAGNOSIS", "DIAGNOSED"],
+              enum: [
+                "PENDING_ASSIGNMENT",
+                "IN_DIAGNOSIS",
+                "DIAGNOSED",
+                "CANCELLED",
+              ],
             },
             leadTechId: {
               type: "string",

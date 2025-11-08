@@ -72,6 +72,13 @@ module.exports = (sequelize, DataTypes) => {
         field: "name",
       },
 
+      employeeCode: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+        field: "employee_code",
+      },
+
       roleId: {
         type: DataTypes.UUID,
         allowNull: false,

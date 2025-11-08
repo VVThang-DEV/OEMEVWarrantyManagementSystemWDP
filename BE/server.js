@@ -20,7 +20,7 @@ db.sequelize
   // .sync({ force: true })
   .then(() => {
     console.log("Connect DB succesfull");
-    server.listen(PORT, () => {
+    server.listen(PORT || 3000, () => {
       console.log(`Server is running on ${PORT}`);
     });
   })

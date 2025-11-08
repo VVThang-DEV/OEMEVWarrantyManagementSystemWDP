@@ -14,6 +14,7 @@ class StockReservationRepository {
 
   findAll = async ({ where }) => {
     const reservations = await StockReservation.findAll({ where });
+
     return reservations.map((r) => r.toJSON());
   };
 
