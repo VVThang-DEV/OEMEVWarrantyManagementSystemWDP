@@ -19,12 +19,25 @@ class WorkScheduleService {
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
 
-      const rawData = XLSX.utils.sheet_to_json(worksheet);
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-      if (!rawData || rawData.length === 0) {
-        throw new BadRequestError("File empty or contains no data");
+      if (!rawData || rawData.length < 2) {
+        throw new BadRequestError("File is empty or contains no data rows.");
       }
 
+      const headers = rawData[0].map((h) => h.toString().trim());
+
+      const requiredHeaders = ["employee_code", "work_date", "status"];
+
+      for (const header of requiredHeaders) {
+        if (!headers.includes(header)) {
+          throw new BadRequestError(
+            `Missing required column in Excel file: ${header}`
+          );
+        }
+      }
+
+      const dataRows = rawData.slice(1);
       const validRecords = [];
       const errors = [];
 
@@ -38,40 +51,38 @@ class WorkScheduleService {
         );
       }
 
-      for (let i = 0; i < rawData.length; i++) {
-        const row = rawData[i];
+      const employeeCodes = dataRows
+        .map((row) => row[headers.indexOf("employee_code")])
+        .filter(Boolean);
+
+      const users = await this.userRepository.findUsersByEmployeeCodes(
+        employeeCodes
+      );
+
+      const userMap = new Map(users.map((user) => [user.employeeCode, user]));
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
         const rowNumber = i + 2;
 
         try {
-          const technicianId =
-            row["Technician ID"] || row["technicianId"] || row["TechnicianID"];
-          const workDate = row["Date"] || row["WorkDate"] || row["workDate"];
-          const status = row["Status"] || row["status"];
+          const employeeCode = row[headers.indexOf("employee_code")];
+          const workDate = row[headers.indexOf("work_date")];
+          const status = row[headers.indexOf("status")];
+          const notes = row[headers.indexOf("notes")] || null;
 
-          if (!technicianId) {
-            errors.push({
-              row: rowNumber,
-              field: "Technician ID",
-              error: "Thiếu Technician ID",
-            });
+          if (!employeeCode) {
+            errors.push(`Row ${rowNumber}: employee_code is missing.`);
             continue;
           }
 
           if (!workDate) {
-            errors.push({
-              row: rowNumber,
-              field: "Date",
-              error: "Thiếu ngày làm việc",
-            });
+            errors.push(`Row ${rowNumber}: work_date is missing.`);
             continue;
           }
 
           if (!status) {
-            errors.push({
-              row: rowNumber,
-              field: "Status",
-              error: "Thiếu trạng thái",
-            });
+            errors.push(`Row ${rowNumber}: status is missing.`);
             continue;
           }
 
@@ -79,11 +90,9 @@ class WorkScheduleService {
           const normalizedStatus = status.toString().toUpperCase().trim();
 
           if (!validStatuses.includes(normalizedStatus)) {
-            errors.push({
-              row: rowNumber,
-              field: "Status",
-              error: "Status is not valid",
-            });
+            errors.push(
+              `Row ${rowNumber}: Status "${status}" is not valid. Must be AVAILABLE or UNAVAILABLE.`
+            );
             continue;
           }
 
@@ -91,6 +100,7 @@ class WorkScheduleService {
           try {
             if (typeof workDate === "number") {
               const excelDate = XLSX.SSF.parse_date_code(workDate);
+
               formattedDate = dayjs(
                 `${excelDate.y}-${excelDate.m}-${excelDate.d}`
               ).format("YYYY-MM-DD");
@@ -99,102 +109,89 @@ class WorkScheduleService {
             }
 
             if (!dayjs(formattedDate).isValid()) {
-              throw new Error("Invalid date");
+              throw new Error("Invalid date format");
             }
           } catch (err) {
-            errors.push({
-              row: rowNumber,
-              field: "Date",
-              error: "Format workdate is not valid",
-            });
+            errors.push(`Row ${rowNumber}: work_date format is not valid.`);
             continue;
           }
 
-          const technician = await this.userRepository.findUserById({
-            userId: technicianId,
-          });
+          const technician = userMap.get(employeeCode.toString());
 
           if (!technician) {
-            errors.push({
-              row: rowNumber,
-              field: "Technician ID",
-              error: `Technician ID "${technicianId}" is not found`,
-            });
+            errors.push(
+              `Row ${rowNumber}: Employee with code "${employeeCode}" not found.`
+            );
             continue;
           }
 
           if (technician.serviceCenterId !== manager.serviceCenterId) {
-            errors.push({
-              row: rowNumber,
-              field: "Technician ID",
-              error: `Technician does not belong to your service center`,
-            });
+            errors.push(
+              `Row ${rowNumber}: Employee does not belong to your service center.`
+            );
             continue;
           }
 
-          const notes = row["Notes"] || row["notes"] || null;
-
           validRecords.push({
-            technicianId: technicianId.trim(),
-            technicianName: technician.name,
+            technicianId: technician.userId,
             workDate: formattedDate,
             status: normalizedStatus,
             notes: notes ? notes.toString().trim() : null,
           });
         } catch (error) {
-          errors.push({
-            row: rowNumber,
-            error: error.message || "Lỗi không xác định",
-          });
+          errors.push(`Row ${rowNumber}: ${error.message || "Unknown error"}`);
         }
       }
 
       return {
         validRecords,
         errors,
-        totalRows: rawData.length,
-        validCount: validRecords.length,
-        errorCount: errors.length,
       };
     } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError(`Lỗi khi parse file Excel: ${error.message}`, 400);
+      if (error instanceof ApiError) throw error;
+      throw new BadRequestError(`Error parsing Excel file: ${error.message}`);
     }
   }
 
   async uploadSchedulesFromExcel({ fileBuffer, managerId }) {
-    const parseResult = await this.parseExcelFile(fileBuffer, managerId);
+    const { validRecords, errors } = await this.parseExcelFile(
+      fileBuffer,
+      managerId
+    );
 
-    // Nếu có lỗi, trả về để frontend hiển thị
-    if (parseResult.errorCount > 0) {
+    if (validRecords.length === 0) {
       return {
         success: false,
-        message: "File có lỗi, vui lòng kiểm tra lại",
-        data: parseResult,
+        message: "No valid data to import.",
+        data: { errors },
       };
     }
 
-    if (parseResult.validCount === 0) {
-      throw new AppError("Không có dữ liệu hợp lệ để import", 400);
-    }
-
     const transaction = await db.sequelize.transaction();
+    try {
+      const result = await this.workScheduleRepository.bulkUpsertSchedules(
+        validRecords,
+        transaction
+      );
 
-    const result = await this.workScheduleRepository.bulkUpsertSchedules(
-      parseResult.validRecords,
-      transaction
-    );
+      await transaction.commit();
 
-    await transaction.commit();
-
-    return {
-      data: {
-        totalProcessed: parseResult.validCount,
-        created: result.created,
-        updated: result.updated,
-        summary: parseResult,
-      },
-    };
+      return {
+        success: true,
+        message: "Schedules imported successfully.",
+        data: {
+          totalProcessed: validRecords.length,
+          created: result.created,
+          updated: result.updated,
+          errors: errors,
+          errorCount: errors.length,
+        },
+      };
+    } catch (error) {
+      await transaction.rollback();
+      // This is a server error (e.g., database constraint violation)
+      throw new ApiError(`Failed to import schedules: ${error.message}`, 500);
+    }
   }
 
   async getSchedules(filters) {

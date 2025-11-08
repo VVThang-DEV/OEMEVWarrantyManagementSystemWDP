@@ -248,7 +248,13 @@ class WareHouseRepository {
         {
           model: Warehouse,
           as: "warehouse",
-          attributes: ["warehouseId", "name", "priority"],
+          attributes: [
+            "warehouseId",
+            "name",
+            "priority",
+            "serviceCenterId",
+            "vehicleCompanyId",
+          ],
         },
         {
           model: TypeComponent,
@@ -453,6 +459,26 @@ class WareHouseRepository {
     );
 
     return newStock ? newStock.toJSON() : null;
+  };
+
+  findStockBySku = async (sku, warehouseId, transaction = null) => {
+    const stock = await Stock.findOne({
+      where: {
+        warehouseId: warehouseId,
+      },
+
+      include: [
+        {
+          model: TypeComponent,
+          as: "typeComponent",
+          where: { sku: sku },
+          required: true,
+        },
+      ],
+      transaction,
+    });
+
+    return stock ? stock.toJSON() : null;
   };
 }
 

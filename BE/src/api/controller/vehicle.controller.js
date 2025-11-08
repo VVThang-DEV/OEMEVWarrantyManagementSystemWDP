@@ -1,3 +1,5 @@
+import xlsx from "xlsx";
+import { BadRequestError } from "../../error/index.js";
 class VehicleController {
   #vehicleService;
   #vehicleProcessingRecordService;
@@ -5,6 +7,56 @@ class VehicleController {
     this.#vehicleService = vehicleService;
     this.#vehicleProcessingRecordService = vehicleProcessingRecordService;
   }
+
+  getBulkCreateTemplate = async (req, res, next) => {
+    try {
+      const workbook = xlsx.utils.book_new();
+
+      const templateRows = [
+        ["vin", "model_sku", "date_of_manufacture", "place_of_manufacture"],
+        ["VF8VIN0012345678", "VF8-STD-2024", "2022-07-15", "Viet Nam"],
+        ["VF9VIN0012345679", "VF9-PLUS-2024", "2023-03-20", "Viet Nam"],
+      ].map((row) => row.slice(0, 4));
+
+      const worksheet = xlsx.utils.aoa_to_sheet(templateRows);
+      xlsx.utils.book_append_sheet(workbook, worksheet, "Template");
+
+      const buffer = xlsx.write(workbook, {
+        type: "buffer",
+        bookType: "xlsx",
+      });
+
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=vehicles_bulk_create_template.xlsx"
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+      return res.status(200).send(buffer);
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  bulkCreateFromExcel = async (req, res, next) => {
+    if (!req.file) {
+      throw new BadRequestError("No Excel file uploaded.");
+    }
+
+    const { companyId } = req;
+    const result = await this.#vehicleService.bulkCreateFromExcel(
+      req.file.buffer,
+      companyId
+    );
+
+    res.status(201).json({
+      status: "success",
+      data: result,
+    });
+  };
 
   getVehicle = async (req, res, next) => {
     const { vin } = req.params;
@@ -65,13 +117,14 @@ class VehicleController {
 
     const { companyId } = req;
 
-    const { odometer } = req.query;
+    const { odometer, categories } = req.query;
 
     const existingVehicle =
       await this.#vehicleService.findVehicleByVinWithWarranty({
         vin: vin,
         companyId: companyId,
         odometer: odometer,
+        categories,
       });
 
     if (!existingVehicle) {
@@ -94,7 +147,7 @@ class VehicleController {
 
     const { companyId } = req;
 
-    const { odometer, purchaseDate } = req.body;
+    const { odometer, purchaseDate, categories } = req.body;
 
     const vehicle =
       await this.#vehicleService.findVehicleByVinWithWarrantyPreview({
@@ -102,6 +155,7 @@ class VehicleController {
         companyId: companyId,
         odometer: odometer,
         purchaseDate: purchaseDate,
+        categories,
       });
 
     if (!vehicle) {

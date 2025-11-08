@@ -1,3 +1,5 @@
+import xlsx from "xlsx";
+
 class InventoryController {
   #inventoryService;
   constructor({ inventoryService }) {
@@ -61,12 +63,11 @@ class InventoryController {
   createInventoryAdjustment = async (req, res, next) => {
     const { userId: adjustedByUserId, roleName } = req.user;
     const { companyId } = req;
-    const { stockId, adjustmentType, quantity, reason, note, components } = req.body;
+    const { stockId, adjustmentType, reason, note, components } = req.body;
 
     const result = await this.#inventoryService.createInventoryAdjustment({
       stockId,
       adjustmentType,
-      quantity,
       reason,
       note,
       components,
@@ -165,6 +166,91 @@ class InventoryController {
         components,
       },
     });
+  };
+
+  createInventoryAdjustmentFromFile = async (req, res, next) => {
+    if (req.query?.template === "true") {
+      try {
+        const workbook = xlsx.utils.book_new();
+
+        const templateRows = [
+          ["SKU", "SERIAL_NUMBER"],
+          ["BRAKE_PAD_SKU", "SN-001"],
+          ["BRAKE_PAD_SKU", "SN-002"],
+          ["FILTER_SKU", "SN-003"],
+        ];
+
+        const worksheet = xlsx.utils.aoa_to_sheet(templateRows);
+        xlsx.utils.book_append_sheet(workbook, worksheet, "Template");
+
+        const buffer = xlsx.write(workbook, {
+          type: "buffer",
+          bookType: "xlsx",
+        });
+
+        res.setHeader(
+          "Content-Disposition",
+          "attachment; filename=inventory-adjustment-template.xlsx"
+        );
+        res.setHeader(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        return res.status(200).send(buffer);
+      } catch (error) {
+        return next(error);
+      }
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded." });
+    }
+
+    const { userId: adjustedByUserId, roleName } = req.user;
+    const { companyId } = req;
+    const { warehouseId, adjustmentType, reason, note } = req.body;
+
+    try {
+      const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = xlsx.utils.sheet_to_json(worksheet, {
+        header: 0,
+        defval: null,
+      });
+
+      const componentsBySku = data.slice(1).reduce((acc, row) => {
+        const sku = row[0];
+        const serialNumber = row[1];
+        if (sku && serialNumber) {
+          if (!acc[sku]) {
+            acc[sku] = [];
+          }
+
+          acc[sku].push({ serialNumber });
+        }
+        return acc;
+      }, {});
+
+      const result = await this.#inventoryService.createBulkAdjustments({
+        warehouseId,
+        adjustmentType,
+        reason,
+        note,
+        componentsBySku,
+        adjustedByUserId,
+        roleName,
+        companyId,
+      });
+
+      res.status(201).json({
+        status: "success",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
   };
 }
 

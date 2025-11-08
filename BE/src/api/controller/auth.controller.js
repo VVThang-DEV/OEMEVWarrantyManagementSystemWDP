@@ -1,12 +1,13 @@
 class AuthController {
+  #authService;
   constructor({ authService }) {
-    this.authService = authService;
+    this.#authService = authService;
   }
 
   login = async (req, res, next) => {
     const { username, password } = req.body;
 
-    const result = await this.authService.login({ username, password });
+    const result = await this.#authService.login({ username, password });
 
     res.status(200).json({
       status: "success",
@@ -16,7 +17,7 @@ class AuthController {
     });
   };
 
-  register = async (req, res, next) => {
+  registerAccount = async (req, res, next) => {
     const {
       username,
       password,
@@ -25,11 +26,14 @@ class AuthController {
       address,
       name,
       roleId,
-      serviceCenterId,
-      vehicleCompanyId,
+      employeeCode,
     } = req.body;
 
-    const newUser = await authService.register({
+    const { serviceCenterId: tokenServiceCenterId } = req.user;
+
+    const { companyId: companyTokenId } = req;
+
+    const newUser = await this.#authService.registerAccount({
       username,
       password,
       email,
@@ -37,8 +41,16 @@ class AuthController {
       address,
       name,
       roleId,
-      serviceCenterId,
-      vehicleCompanyId,
+      employeeCode,
+      serviceCenterId: tokenServiceCenterId ?? null,
+      vehicleCompanyId: companyTokenId ?? null,
+    });
+
+    res.status(201).json({
+      status: "success",
+      data: {
+        user: newUser,
+      },
     });
   };
 }

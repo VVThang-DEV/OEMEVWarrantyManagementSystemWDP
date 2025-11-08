@@ -59,6 +59,19 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         field: "purchase_date",
       },
+
+      outstandingRecallCampaignIds: {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: [],
+        field: "outstanding_recall_campaign_ids",
+      },
+
+      lastRecallRepairDate: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: "last_recall_repair_date",
+      },
     },
     {
       tableName: "vehicle",
@@ -85,6 +98,12 @@ module.exports = (sequelize, DataTypes) => {
     Vehicle.hasOne(models.VehicleProcessingRecord, {
       foreignKey: "vin",
       as: "vehicleRecord",
+    });
+
+    Vehicle.hasMany(models.VehicleRecall, {
+      foreignKey: "vin",
+      sourceKey: "vin",
+      as: "recallRecords",
     });
   };
 
