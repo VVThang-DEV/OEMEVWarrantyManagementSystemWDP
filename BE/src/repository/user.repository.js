@@ -154,19 +154,8 @@ class UserRepository {
     return user ? user.toJSON() : null;
   };
 
-  createUser = async ({
-    username,
-    password,
-    email,
-    phone,
-    address,
-    name,
-    roleId,
-    employeeCode,
-    serviceCenterId,
-    vehicleCompanyId,
-  }) => {
-    const newUser = await User.create({
+  createUser = async (
+    {
       username,
       password,
       email,
@@ -177,9 +166,26 @@ class UserRepository {
       employeeCode,
       serviceCenterId,
       vehicleCompanyId,
-    });
+    },
+    transaction = null
+  ) => {
+    const newUser = await User.create(
+      {
+        username,
+        password,
+        email,
+        phone,
+        address,
+        name,
+        roleId,
+        employeeCode,
+        serviceCenterId,
+        vehicleCompanyId,
+      },
+      { transaction }
+    );
 
-    return newUser.toJSON();
+    return newUser;
   };
 }
 
