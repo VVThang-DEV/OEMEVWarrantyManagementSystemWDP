@@ -89,191 +89,191 @@ export const setupContainer = (socket) => {
 
     // Repositories
     userRepository: asClass(UserRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     vehicleRepository: asClass(VehicleRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     customerRepository: asClass(CustomerRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     vehicleProcessingRecordRepository: asClass(
       VehicleProcessingRecordRepository,
       {
-        lifetime: Lifetime.SINGLETON,
+        lifetime: Lifetime.SCOPED,
       }
     ),
     guaranteeCaseRepository: asClass(GuaranteeCaseRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     conversationRepository: asClass(ConversationRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     messageRepository: asClass(MessageRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     guestRepository: asClass(GuestRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     caselineRepository: asClass(CaselineRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     componentReservationRepository: asClass(ComponentReservationRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     componentRepository: asClass(ComponentRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     warehouseRepository: asClass(WarehouseRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     stockTransferRequestRepository: asClass(StockTransferRequestRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     stockTransferRequestItemRepository: asClass(
       StockTransferRequestItemRepository,
       {
-        lifetime: Lifetime.SINGLETON,
+        lifetime: Lifetime.SCOPED,
       }
     ),
     workScheduleRepository: asClass(WorkScheduleRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     inventoryRepository: asClass(InventoryRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     taskAssignmentRepository: asClass(TaskAssignmentRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     oemVehicleModelRepository: asClass(OemVehicleModelRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     warrantyComponentRepository: asClass(WarrantyComponentRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     typeComponentRepository: asClass(TypeComponentRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     recallRepository: asClass(RecallRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     roleRepository: asClass(RoleRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     serviceCenterRepository: asClass(ServiceCenterRepository, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
 
     // Services
-    userService: asClass(UserService, { lifetime: Lifetime.SINGLETON }),
-    hashService: asClass(HashService, { lifetime: Lifetime.SINGLETON }),
-    authService: asClass(AuthService, { lifetime: Lifetime.SINGLETON }),
-    tokenService: asClass(TokenService, { lifetime: Lifetime.SINGLETON }),
+    userService: asClass(UserService, { lifetime: Lifetime.SCOPED }),
+    hashService: asClass(HashService, { lifetime: Lifetime.SCOPED }),
+    authService: asClass(AuthService, { lifetime: Lifetime.SCOPED }),
+    tokenService: asClass(TokenService, { lifetime: Lifetime.SCOPED }),
     vehicleService: asClass(VehicleService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     customerService: asClass(CustomerService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     vehicleProcessingRecordService: asClass(VehicleProcessingRecordService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
-    chatService: asClass(ChatService, { lifetime: Lifetime.SINGLETON }),
+    chatService: asClass(ChatService, { lifetime: Lifetime.SCOPED }),
     notificationService: asClass(NotificationService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     caseLineService: asClass(CaseLineService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     componentReservationService: asClass(ComponentReservationService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     warehouseService: asClass(WarehouseService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     stockTransferRequestService: asClass(StockTransferRequestService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     workScheduleService: asClass(WorkScheduleService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
-    mailService: asClass(MailService, { lifetime: Lifetime.SINGLETON }),
+    mailService: asClass(MailService, { lifetime: Lifetime.SCOPED }),
     inventoryService: asClass(InventoryService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     taskAssignmentService: asClass(TaskAssignmentService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     oemVehicleModelService: asClass(OemVehicleModelService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     recallService: asClass(RecallService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     roleService: asClass(RoleService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     serviceCenterService: asClass(ServiceCenterService, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
 
     // Controllers
     authController: asClass(AuthController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     userController: asClass(UserController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     vehicleController: asClass(VehicleController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     customerController: asClass(CustomerController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     vehicleProcessingRecordController: asClass(
       VehicleProcessingRecordController,
       {
-        lifetime: Lifetime.SINGLETON,
+        lifetime: Lifetime.SCOPED,
       }
     ),
     chatController: asClass(ChatController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     caseLineController: asClass(CaseLineController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     componentReservationsController: asClass(ComponentReservationsController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     componentController: asClass(ComponentController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     warehouseController: asClass(WarehouseController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     stockTransferRequestController: asClass(StockTransferRequestController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     workScheduleController: asClass(WorkScheduleController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     mailController: asClass(MailController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     inventoryController: asClass(InventoryController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     taskAssignmentController: asClass(TaskAssignmentController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     oemVehicleModelController: asClass(OemVehicleModelController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     recallController: asClass(RecallController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
     roleController: asClass(RoleController, {
-      lifetime: Lifetime.SINGLETON,
+      lifetime: Lifetime.SCOPED,
     }),
   });
 };
