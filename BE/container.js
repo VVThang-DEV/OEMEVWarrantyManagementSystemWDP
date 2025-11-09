@@ -6,6 +6,8 @@ import {
   Lifetime,
 } from "awilix";
 import db from "./src/models/index.cjs";
+import redisClient from "./src/util/redisClient.js";
+import mailTransporter from "./src/util/emailTransporter.js";
 
 // Import repositories
 import UserRepository from "./src/repository/user.repository.js";
@@ -20,10 +22,12 @@ import CaselineRepository from "./src/repository/caseline.repository.js";
 import ComponentReservationRepository from "./src/repository/componentReservation.repository.js";
 import ComponentRepository from "./src/repository/component.repository.js";
 import WarehouseRepository from "./src/repository/warehouse.repository.js";
+import InventoryAdjustmentRepository from "./src/repository/inventoryAdjustment.repository.js";
 import StockTransferRequestRepository from "./src/repository/stockTransferRequest.repository.js";
 import StockTransferRequestItemRepository from "./src/repository/stockTransferRequestItem.repository.js";
 import WorkScheduleRepository from "./src/repository/workSchedule.repository.js";
 import InventoryRepository from "./src/repository/inventory.repository.js";
+import StockReservationRepository from "./src/repository/stockReservation.repository.js";
 import TaskAssignmentRepository from "./src/repository/taskAssignment.repository.js";
 import OemVehicleModelRepository from "./src/repository/oemVehicleModel.repository.js";
 import WarrantyComponentRepository from "./src/repository/warrantyComponent.repository.js";
@@ -54,6 +58,7 @@ import OemVehicleModelService from "./src/service/oemVehicleModel.service.js";
 import RecallService from "./src/service/recall.service.js";
 import RoleService from "./src/service/role.service.js";
 import ServiceCenterService from "./src/service/serviceCenter.service.js";
+import WarrantyComponentService from "./src/service/warrantyComponent.service.js";
 
 // Import controllers
 import AuthController from "./src/api/controller/auth.controller.js";
@@ -64,7 +69,7 @@ import VehicleProcessingRecordController from "./src/api/controller/vehicleProce
 import ChatController from "./src/api/controller/chat.controller.js";
 import CaseLineController from "./src/api/controller/caseLine.controller.js";
 import ComponentReservationsController from "./src/api/controller/componentReservations.controller.js";
-import ComponentController from "./src/api/controller/warrantyComponent.controller.js";
+import WarrantyComponentController from "./src/api/controller/warrantyComponent.controller.js";
 import WarehouseController from "./src/api/controller/warehouse.controller.js";
 import StockTransferRequestController from "./src/api/controller/stockTransferRequest.controller.js";
 import WorkScheduleController from "./src/api/controller/workSchedule.controller.js";
@@ -86,6 +91,8 @@ export const setupContainer = (socket) => {
 
     // Models
     db: asValue(db),
+    redis: asValue(redisClient),
+    transporter: asValue(mailTransporter),
 
     // Repositories
     userRepository: asClass(UserRepository, {
@@ -127,6 +134,9 @@ export const setupContainer = (socket) => {
     warehouseRepository: asClass(WarehouseRepository, {
       lifetime: Lifetime.SCOPED,
     }),
+    inventoryAdjustmentRepository: asClass(InventoryAdjustmentRepository, {
+      lifetime: Lifetime.SCOPED,
+    }),
     stockTransferRequestRepository: asClass(StockTransferRequestRepository, {
       lifetime: Lifetime.SCOPED,
     }),
@@ -140,6 +150,9 @@ export const setupContainer = (socket) => {
       lifetime: Lifetime.SCOPED,
     }),
     inventoryRepository: asClass(InventoryRepository, {
+      lifetime: Lifetime.SCOPED,
+    }),
+    stockReservationRepository: asClass(StockReservationRepository, {
       lifetime: Lifetime.SCOPED,
     }),
     taskAssignmentRepository: asClass(TaskAssignmentRepository, {
@@ -216,6 +229,9 @@ export const setupContainer = (socket) => {
     serviceCenterService: asClass(ServiceCenterService, {
       lifetime: Lifetime.SCOPED,
     }),
+    warrantyComponentService: asClass(WarrantyComponentService, {
+      lifetime: Lifetime.SCOPED,
+    }),
 
     // Controllers
     authController: asClass(AuthController, {
@@ -245,7 +261,7 @@ export const setupContainer = (socket) => {
     componentReservationsController: asClass(ComponentReservationsController, {
       lifetime: Lifetime.SCOPED,
     }),
-    componentController: asClass(ComponentController, {
+    warrantyComponentController: asClass(WarrantyComponentController, {
       lifetime: Lifetime.SCOPED,
     }),
     warehouseController: asClass(WarehouseController, {

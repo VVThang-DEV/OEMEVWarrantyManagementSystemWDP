@@ -86,9 +86,6 @@ class ChatService {
       staffId: userId,
     };
 
-    console.log(
-      `[Backend] Staff (${userId}) accepted conversation ${conversationId}. Emitting '${event}' to room '${room}'`
-    );
     this.#chats.to(room).emit(event, data);
 
     return rawResult;
@@ -134,12 +131,9 @@ class ChatService {
     return messages;
   };
 
-  getMyConversations = async ({ userId, status }) => {
+  getMyConversations = async ({ userId }) => {
     const conversations =
-      await this.#conversationRepository.getConversationsByStaffId(
-        userId,
-        status
-      );
+      await this.#conversationRepository.getConversationsByStaffId(userId);
 
     return conversations;
   };
