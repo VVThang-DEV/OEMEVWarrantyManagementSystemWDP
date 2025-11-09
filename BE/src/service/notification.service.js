@@ -1,10 +1,10 @@
 import dayjs from "dayjs";
 
 class NotificationService {
-  #notifications;
+  #notificationNamespace;
 
-  constructor({ notifications }) {
-    this.#notifications = notifications;
+  constructor({ notificationNamespace }) {
+    this.#notificationNamespace = notificationNamespace;
   }
 
   sendToRoom(roomName, eventName, data) {
@@ -25,7 +25,7 @@ class NotificationService {
       data
     );
 
-    this.#notifications.to(roomName).emit(eventName, {
+    this.#notificationNamespace.to(roomName).emit(eventName, {
       ...data,
       sentAt: dayjs(),
       room: roomName,
