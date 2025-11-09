@@ -1,7 +1,7 @@
 class ComponentReservationsController {
-  #componentReservationsService;
-  constructor({ componentReservationsService }) {
-    this.#componentReservationsService = componentReservationsService;
+  #componentReservationService;
+  constructor({ componentReservationService }) {
+    this.#componentReservationService = componentReservationService;
   }
 
   getComponentReservations = async (req, res, next) => {
@@ -23,7 +23,7 @@ class ComponentReservationsController {
     const { serviceCenterId } = req.user;
 
     const result =
-      await this.#componentReservationsService.getComponentReservations({
+      await this.#componentReservationService.getComponentReservations({
         page,
         limit,
         status,
@@ -51,7 +51,7 @@ class ComponentReservationsController {
     const { reservationIds, pickedUpByTechId } = req.body;
 
     const updatedReservations =
-      await this.#componentReservationsService.pickupReservedComponents({
+      await this.#componentReservationService.pickupReservedComponents({
         reservationIds,
         serviceCenterId,
         pickedUpByTechId,
@@ -70,7 +70,7 @@ class ComponentReservationsController {
     const { serviceCenterId } = req.user;
 
     const updatedComponent =
-      await this.#componentReservationsService.installComponent({
+      await this.#componentReservationService.installComponent({
         reservationId,
         serviceCenterId,
       });
