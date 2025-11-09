@@ -24,6 +24,7 @@ export function DashboardOverview({}: DashboardOverviewProps) {
     awaitingReturn: 0,
     returnedToday: 0,
   });
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,39 +34,44 @@ export function DashboardOverview({}: DashboardOverviewProps) {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Use dedicated component reservations endpoint
-      // This endpoint is authorized for parts_coordinator_service_center role
+      // ✅ Backend chỉ hỗ trợ 3 trạng thái sau trong filter
+      // RESERVED, PICKED_UP, INSTALLED
+      const [reserved, pickedUp, installed, allReservations] =
+        await Promise.all([
+          componentReservationService.getComponentReservations({
+            status: "RESERVED",
+            limit: 1,
+          }),
+          componentReservationService.getComponentReservations({
+            status: "PICKED_UP",
+            limit: 1,
+          }),
+          componentReservationService.getComponentReservations({
+            status: "INSTALLED",
+            limit: 1,
+          }),
 
-      // Fetch different statuses in parallel
-      const [reserved, pickedUp, installed, returned] = await Promise.all([
-        componentReservationService.getComponentReservations({
-          status: "RESERVED",
-          limit: 1,
-        }),
-        componentReservationService.getComponentReservations({
-          status: "PICKED_UP",
-          limit: 1,
-        }),
-        componentReservationService.getComponentReservations({
-          status: "INSTALLED",
-          limit: 1,
-        }),
-        componentReservationService.getComponentReservations({
-          status: "RETURNED",
-          limit: 1,
-        }),
-      ]);
+          // ✅ Gọi ALL để lọc RETURNED thủ công
+          componentReservationService.getComponentReservations({
+            limit: 100,
+          }),
+        ]);
 
-      // Get today's returned count (requires filtering by date)
+      // ✅ Tính số returnedToday
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const returnedTodayCount = returned.data.reservations.filter((r) => {
-        if (!r.returnedAt) return false;
-        const returnDate = new Date(r.returnedAt);
-        returnDate.setHours(0, 0, 0, 0);
-        return returnDate.getTime() === today.getTime();
-      }).length;
+      const returnedTodayCount = allReservations.data.reservations.filter(
+        (r) => {
+          if (r.status !== "RETURNED") return false;
+          if (!r.returnedAt) return false;
+
+          const returnDate = new Date(r.returnedAt);
+          returnDate.setHours(0, 0, 0, 0);
+
+          return returnDate.getTime() === today.getTime();
+        }
+      ).length;
 
       setStats({
         pendingPickups: reserved.data.pagination.total,
@@ -75,7 +81,6 @@ export function DashboardOverview({}: DashboardOverviewProps) {
       });
     } catch (error) {
       console.error("Error loading dashboard data:", error);
-      // Keep stats at 0 on error
       setStats({
         pendingPickups: 0,
         inTransit: 0,
@@ -92,7 +97,6 @@ export function DashboardOverview({}: DashboardOverviewProps) {
       label: "Pending Pickups",
       value: stats.pendingPickups,
       icon: Package,
-      color: "blue",
       bgColor: "bg-blue-100",
       textColor: "text-blue-600",
     },
@@ -100,7 +104,6 @@ export function DashboardOverview({}: DashboardOverviewProps) {
       label: "Components in Transit",
       value: stats.inTransit,
       icon: Truck,
-      color: "purple",
       bgColor: "bg-purple-100",
       textColor: "text-purple-600",
     },
@@ -108,7 +111,6 @@ export function DashboardOverview({}: DashboardOverviewProps) {
       label: "Awaiting Return",
       value: stats.awaitingReturn,
       icon: Clock,
-      color: "yellow",
       bgColor: "bg-yellow-100",
       textColor: "text-yellow-600",
     },
@@ -116,7 +118,6 @@ export function DashboardOverview({}: DashboardOverviewProps) {
       label: "Returned Today",
       value: stats.returnedToday,
       icon: RotateCcw,
-      color: "green",
       bgColor: "bg-green-100",
       textColor: "text-green-600",
     },
@@ -126,7 +127,7 @@ export function DashboardOverview({}: DashboardOverviewProps) {
     <div className="flex-1 overflow-auto">
       <div className="p-8">
         <div className="grid grid-cols-12 gap-6">
-          {/* Main Content - 8 cols */}
+          {/* Main Content */}
           <div className="col-span-8 space-y-6">
             {/* Header */}
             <motion.div
@@ -134,16 +135,12 @@ export function DashboardOverview({}: DashboardOverviewProps) {
               animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-2xl border border-gray-200 p-6"
             >
-              <div className="mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    Parts Coordinator Dashboard
-                  </h1>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Manage component pickups, installations, and returns
-                  </p>
-                </div>
-              </div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Parts Coordinator Dashboard
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Manage component pickups, installations, and returns
+              </p>
             </motion.div>
 
             {/* Stats Grid */}
@@ -164,7 +161,7 @@ export function DashboardOverview({}: DashboardOverviewProps) {
                     </div>
                     <TrendingUp className="w-4 h-4 text-gray-400" />
                   </div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">
+                  <p className="text-sm font-medium text-gray-600">
                     {stat.label}
                   </p>
                   <p className="text-2xl font-bold text-gray-900">
@@ -175,9 +172,9 @@ export function DashboardOverview({}: DashboardOverviewProps) {
             </div>
           </div>
 
-          {/* Sidebar - 4 cols */}
+          {/* Sidebar */}
           <div className="col-span-4 space-y-6">
-            {/* Quick Stats */}
+            {/* Today Activity */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -192,6 +189,7 @@ export function DashboardOverview({}: DashboardOverviewProps) {
                   Today&apos;s Activity
                 </h3>
               </div>
+
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">
@@ -201,12 +199,14 @@ export function DashboardOverview({}: DashboardOverviewProps) {
                     {stats.inTransit}
                   </span>
                 </div>
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Parts Returned</span>
                   <span className="text-sm font-semibold text-gray-900">
                     {stats.returnedToday}
                   </span>
                 </div>
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Pending Actions</span>
                   <span className="text-sm font-semibold text-gray-900">
@@ -227,46 +227,50 @@ export function DashboardOverview({}: DashboardOverviewProps) {
                 <AlertCircle className="w-5 h-5" />
                 Workflow Instructions
               </h3>
+
               <div className="space-y-3">
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                    1
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Pickup</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Go to &ldquo;Component Pickups&rdquo; in sidebar to mark
-                      components as picked up from warehouse
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                    2
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Install</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Technician will install the component on the vehicle
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                    3
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Return</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Go to &ldquo;Component Returns&rdquo; in sidebar to return
-                      old components with serial number
-                    </p>
-                  </div>
-                </div>
+                <InstructionStep
+                  number="1"
+                  title="Pickup"
+                  desc="Go to “Component Pickups” to mark components as picked up"
+                />
+                <InstructionStep
+                  number="2"
+                  title="Install"
+                  desc="Technician installs the component on the vehicle"
+                />
+                <InstructionStep
+                  number="3"
+                  title="Return"
+                  desc="Go to “Component Returns” to return old components"
+                />
               </div>
             </motion.div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Small UI helper component
+function InstructionStep({
+  number,
+  title,
+  desc,
+}: {
+  number: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
+        {number}
+      </div>
+      <div>
+        <p className="text-sm font-medium text-blue-900">{title}</p>
+        <p className="text-xs text-blue-700 mt-1">{desc}</p>
       </div>
     </div>
   );
