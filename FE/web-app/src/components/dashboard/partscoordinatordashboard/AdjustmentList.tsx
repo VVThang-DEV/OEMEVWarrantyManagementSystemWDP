@@ -42,7 +42,6 @@ export default function AdjustmentList() {
 
       const result = await inventoryService.getAdjustmentList({ page });
 
-      // ✅ BE trả "items"
       setAdjustments(result.items ?? []);
 
       setPagination({
@@ -98,7 +97,6 @@ export default function AdjustmentList() {
             Adjustment History
           </h2>
 
-          {/* ✅ SEARCH ĐÃ FIX UI */}
           <div className="relative w-64">
             <Search className="w-4 h-4 absolute left-3 top-3 text-black" />
             <input
@@ -139,6 +137,7 @@ export default function AdjustmentList() {
                   <th className="py-3 text-center">Actions</th>
                 </tr>
               </thead>
+
               <tbody>
                 {adjustments.map((a) => (
                   <tr
@@ -152,6 +151,7 @@ export default function AdjustmentList() {
                     <td className="py-3">
                       {new Date(a.createdAt).toLocaleString()}
                     </td>
+
                     <td className="py-3 text-center">
                       <button
                         onClick={() => openDetail(a.adjustmentId)}

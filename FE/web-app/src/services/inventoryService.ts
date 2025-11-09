@@ -95,7 +95,6 @@ export interface InventoryAdjustmentDetail {
   }[];
 }
 
-// ✅ Backend trả: currentPage, totalPages, totalItems, itemsPerPage
 export interface AdjustmentPagination {
   totalItems: number;
   totalPages: number;
@@ -103,11 +102,6 @@ export interface AdjustmentPagination {
   itemsPerPage: number;
 }
 
-// ✅ Backend trả data:
-// {
-//   items: [...],
-//   pagination: {...}
-// }
 export interface InventoryAdjustmentListResponse {
   items: InventoryAdjustmentSummary[];
   pagination: AdjustmentPagination;
@@ -126,7 +120,7 @@ export interface StockHistoryPagination {
   totalItems: number;
   totalPages: number;
   currentPage: number;
-  itemsPerPage: number; // ✅ bổ sung theo backend
+  itemsPerPage: number;
 }
 
 export interface StockHistoryResponse {
