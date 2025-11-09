@@ -44,7 +44,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: true,
         field: "note",
-        comment: "Ghi chú chi tiết về điều chỉnh",
       },
 
       adjustedByUserId: {
@@ -62,7 +61,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: DataTypes.NOW,
         field: "adjusted_at",
-        comment: "Thời gian thực hiện điều chỉnh",
       },
     },
     {
