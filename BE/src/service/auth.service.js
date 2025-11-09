@@ -12,17 +12,20 @@ class AuthService {
   #hashService;
   #tokenService;
   #serviceCenterRepository;
+  #roleRepository;
 
   constructor({
     userRepository,
     hashService,
     tokenService,
     serviceCenterRepository,
+    roleRepository,
   }) {
     this.#userRepository = userRepository;
     this.#hashService = hashService;
     this.#tokenService = tokenService;
     this.#serviceCenterRepository = serviceCenterRepository;
+    this.#roleRepository = roleRepository;
   }
 
   login = async ({ username, password }) => {
@@ -84,6 +87,30 @@ class AuthService {
     }
 
     const newUser = await db.sequelize.transaction(async (transaction) => {
+      const existingRole = await this.#roleRepository.findById(roleId);
+      if (!existingRole) {
+        throw new BadRequestError("Invalid roleId");
+      }
+
+      const serviceCenterRoles = [
+        "service_center_staff",
+        "service_center_technician",
+        "parts_coordinator_service_center",
+        "service_center_manager",
+      ];
+
+      const companyRoles = ["emv_staff", "parts_coordinator_company", "emv_admin"];
+
+      if (serviceCenterId && !serviceCenterRoles.includes(existingRole.roleName)) {
+        throw new BadRequestError(
+          "Service center users can only create users with service center roles."
+        );
+      }
+
+      if (vehicleCompanyId && !companyRoles.includes(existingRole.roleName)) {
+        throw new BadRequestError("Company users can only create users with company roles.");
+      }
+
       const existingEmployeeCodes =
         await this.#userRepository.findUsersByEmployeeCodes(
           [normalizedEmployeeCode],
@@ -133,6 +160,7 @@ class AuthService {
             roleId,
             employeeCode: normalizedEmployeeCode,
             serviceCenterId,
+            vehicleCompanyId: null,
           },
           transaction
         );
@@ -148,6 +176,7 @@ class AuthService {
           name,
           roleId,
           employeeCode: normalizedEmployeeCode,
+          serviceCenterId: null,
           vehicleCompanyId,
         },
         transaction
