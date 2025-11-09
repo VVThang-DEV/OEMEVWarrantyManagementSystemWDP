@@ -29,9 +29,8 @@ class AuthController {
       employeeCode,
     } = req.body;
 
-    const { serviceCenterId: tokenServiceCenterId } = req.user;
-
-    const { companyId: companyTokenId } = req;
+    const { serviceCenterId: tokenServiceCenterId, companyId: tokenCompanyId } =
+      req.user;
 
     const newUser = await this.#authService.registerAccount({
       username,
@@ -43,7 +42,7 @@ class AuthController {
       roleId,
       employeeCode,
       serviceCenterId: tokenServiceCenterId ?? null,
-      vehicleCompanyId: companyTokenId ?? null,
+      vehicleCompanyId: tokenCompanyId ?? null,
     });
 
     res.status(201).json({

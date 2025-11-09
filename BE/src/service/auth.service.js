@@ -83,29 +83,31 @@ class AuthService {
       throw new BadRequestError("employeeCode cannot be empty");
     }
 
-    const existingEmployeeCodes = await this.#userRepository
-      .findUsersByEmployeeCodes([normalizedEmployeeCode])
-      .catch(() => []);
-
-    if (existingEmployeeCodes && existingEmployeeCodes.length > 0) {
-      throw new ConflictError("employeeCode already exists");
-    }
-
-    const hashedPassword = await this.#hashService.hash({ string: password });
-
-    if (serviceCenterId && vehicleCompanyId) {
-      throw new BadRequestError(
-        "Provide either serviceCenterId or vehicleCompanyId, not both"
-      );
-    }
-
-    if (!serviceCenterId && !vehicleCompanyId) {
-      throw new BadRequestError(
-        "serviceCenterId or vehicleCompanyId must be provided"
-      );
-    }
-
     const newUser = await db.sequelize.transaction(async (transaction) => {
+      const existingEmployeeCodes =
+        await this.#userRepository.findUsersByEmployeeCodes(
+          [normalizedEmployeeCode],
+          transaction
+        );
+
+      if (existingEmployeeCodes && existingEmployeeCodes.length > 0) {
+        throw new ConflictError("employeeCode already exists");
+      }
+
+      const hashedPassword = await this.#hashService.hash({ string: password });
+
+      if (serviceCenterId && vehicleCompanyId) {
+        throw new BadRequestError(
+          "Provide either serviceCenterId or vehicleCompanyId, not both"
+        );
+      }
+
+      if (!serviceCenterId && !vehicleCompanyId) {
+        throw new BadRequestError(
+          "serviceCenterId or vehicleCompanyId must be provided"
+        );
+      }
+
       if (serviceCenterId) {
         const serviceCenter =
           await this.#serviceCenterRepository.findServiceCenterById(
@@ -120,7 +122,24 @@ class AuthService {
           throw new NotFoundError("Service Center not found");
         }
 
-        return this.#userRepository.createUser({
+        return this.#userRepository.createUser(
+          {
+            username,
+            password: hashedPassword,
+            email,
+            phone,
+            address,
+            name,
+            roleId,
+            employeeCode: normalizedEmployeeCode,
+            serviceCenterId,
+          },
+          transaction
+        );
+      }
+
+      return this.#userRepository.createUser(
+        {
           username,
           password: hashedPassword,
           email,
@@ -128,26 +147,16 @@ class AuthService {
           address,
           name,
           roleId,
-          employeeCode,
           employeeCode: normalizedEmployeeCode,
-          serviceCenterId,
-        });
-      }
-
-      return this.#userRepository.createUser({
-        username,
-        password: hashedPassword,
-        email,
-        phone,
-        address,
-        name,
-        roleId,
-        employeeCode: normalizedEmployeeCode,
-        vehicleCompanyId,
-      });
+          vehicleCompanyId,
+        },
+        transaction
+      );
     });
 
-    const { password: _password, ...userWithoutPassword } = newUser || {};
+    const { password: _password, ...userWithoutPassword } = newUser
+      ? newUser.get({ plain: true })
+      : {};
 
     return userWithoutPassword;
   };
