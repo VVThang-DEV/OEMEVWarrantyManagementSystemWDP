@@ -25,6 +25,7 @@ import {
   StockTransferRequestList,
   AllCaseLinesList,
   WarehouseOverview,
+  CreateUserAccount,
 } from "@/components/dashboard";
 
 interface CurrentUser {
@@ -34,7 +35,7 @@ interface CurrentUser {
 }
 
 export default function ManagerDashboard() {
-  // Protect this route - only allow managers
+  // Protect route: only allow managers
   useRoleProtection(["service_center_manager"]);
 
   const [activeNav, setActiveNav] = useState("dashboard");
@@ -44,6 +45,7 @@ export default function ManagerDashboard() {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [warehouseId, setWarehouseId] = useState<string | null>(null);
 
+  // Load current user + fetch data
   useEffect(() => {
     const user = authService.getCurrentUser();
     setCurrentUser(user);
@@ -61,13 +63,10 @@ export default function ManagerDashboard() {
           "@/services/warehouseService"
         );
         const { warehouses } = await warehouseService.getWarehouseInfo();
-        // Find the warehouse for this service center
         const warehouse = warehouses.find(
           (w) => w.serviceCenterId === user.serviceCenterId
         );
-        if (warehouse) {
-          setWarehouseId(warehouse.warehouseId);
-        }
+        if (warehouse) setWarehouseId(warehouse.warehouseId);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -78,6 +77,7 @@ export default function ManagerDashboard() {
     authService.logout();
   };
 
+  // ==== Sidebar items ====
   const navItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
     { id: "customers", icon: UserCog, label: "Customers" },
@@ -87,31 +87,27 @@ export default function ManagerDashboard() {
     { id: "schedules", icon: Calendar, label: "Schedules" },
     { id: "warehouse", icon: Warehouse, label: "Warehouse Stock" },
     { id: "transfers", icon: Package, label: "Stock Transfers" },
+    // Menu CreateUserAccount chỉ hiển thị nếu manager/admin
+    { id: "create-user", icon: UserCog, label: "Create User Account" },
   ];
 
+  // ==== Render content theo activeNav ====
   const renderContent = () => {
     switch (activeNav) {
       case "dashboard":
         return <ManagerDashboardOverview technicians={technicians} />;
-
       case "customers":
         return <CustomerManagement />;
-
       case "caselines":
         return <CaseLineOperations />;
-
       case "all-caselines":
         return <AllCaseLinesList />;
-
       case "tasks":
         return <ManagerCasesList />;
-
       case "schedules":
         return <ScheduleManagement />;
-
       case "warehouse":
         return <WarehouseOverview />;
-
       case "transfers":
         return (
           <StockTransferRequestList
@@ -122,7 +118,8 @@ export default function ManagerDashboard() {
             }}
           />
         );
-
+      case "create-user":
+        return <CreateUserAccount />;
       default:
         return null;
     }
@@ -135,7 +132,12 @@ export default function ManagerDashboard() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         activeNav={activeNav}
         onNavChange={setActiveNav}
-        navItems={navItems}
+        navItems={navItems.filter(
+          (item) =>
+            item.id !== "create-user" ||
+            currentUser?.roleName === "emv_admin" ||
+            currentUser?.roleName === "service_center_manager"
+        )} // chỉ admin/manager thấy
         brandIcon={FileText}
         brandName="Manager"
         brandSubtitle="Team Management"

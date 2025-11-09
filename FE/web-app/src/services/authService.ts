@@ -2,7 +2,7 @@ import apiClient from "@/lib/apiClient";
 
 /**
  * Authentication Service
- * Handles login, logout, and token management
+ * Handles login, logout, registration, and token management
  */
 
 export interface LoginCredentials {
@@ -10,11 +10,28 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface RegisterCredentials {
+  username: string;
+  password: string;
+  email: string;
+  phone?: string;
+  name?: string;
+  address?: string;
+  roleId?: string;
+  employeeCode?: string;
+}
+
 export interface LoginResponse {
   status: string;
   data: {
     token: string;
   };
+}
+
+export interface RegisterResponse {
+  status: string;
+  message?: string;
+  data?: any;
 }
 
 export interface DecodedToken {
@@ -96,13 +113,47 @@ export const login = async (credentials: LoginCredentials): Promise<string> => {
 };
 
 /**
+ * Register a new user account
+ * @param credentials - User registration data
+ * @returns success message
+ */
+export const registerAccount = async (
+  credentials: RegisterCredentials
+): Promise<string> => {
+  try {
+    const response = await apiClient.post<RegisterResponse>(
+      "/auth/registerAccount",
+      credentials
+    );
+
+    console.log("📝 Register Response:", response.data);
+
+    if (response.data.status === "success") {
+      return response.data.message || "Registration successful.";
+    } else {
+      throw new Error(response.data.message || "Registration failed.");
+    }
+  } catch (error) {
+    console.error("❌ Registration failed:", error);
+    if (error && typeof error === "object" && "response" in error) {
+      const axiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      if (axiosError.response?.data?.message) {
+        throw new Error(axiosError.response.data.message);
+      }
+    }
+    throw new Error("Failed to register account. Please try again.");
+  }
+};
+
+/**
  * Logout user and clear authentication data
  */
 export const logout = (): void => {
   if (typeof window !== "undefined") {
     localStorage.removeItem("authToken");
     localStorage.removeItem("userInfo"); // Also clear user info
-    // Clear any other auth-related data if needed
     window.location.href = "/login";
   }
 };
@@ -117,7 +168,6 @@ export const isAuthenticated = (): boolean => {
   const token = localStorage.getItem("authToken");
   if (!token) return false;
 
-  // Check if token is expired (optional - implement JWT decode)
   try {
     const decoded = decodeToken(token);
     if (decoded.exp && decoded.exp * 1000 < Date.now()) {
@@ -126,7 +176,7 @@ export const isAuthenticated = (): boolean => {
     }
     return true;
   } catch {
-    return !!token; // If decode fails, just check if token exists
+    return !!token;
   }
 };
 
@@ -205,6 +255,7 @@ export const getUserInfo = (): UserInfo | null => {
  */
 export const authService = {
   login,
+  registerAccount,
   logout,
   isAuthenticated,
   getToken,
