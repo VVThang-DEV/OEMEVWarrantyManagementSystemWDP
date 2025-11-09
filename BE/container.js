@@ -264,9 +264,6 @@ export const setupContainer = (socket) => {
     warrantyComponentController: asClass(WarrantyComponentController, {
       lifetime: Lifetime.SCOPED,
     }),
-    componentController: asClass(WarrantyComponentController, {
-      lifetime: Lifetime.SCOPED,
-    }),
     warehouseController: asClass(WarehouseController, {
       lifetime: Lifetime.SCOPED,
     }),
