@@ -16,12 +16,7 @@ class ChatController {
     res.status(201).json({
       status: "success",
       data: {
-        conversation: {
-          conversationId: conversation.id,
-          guestId: conversation.guestId,
-          status: conversation.status,
-          createdAt: conversation.createdAt,
-        },
+        conversation,
       },
     });
   };
@@ -51,32 +46,19 @@ class ChatController {
       conversationId,
     });
 
-    // Map backend format to frontend format
-    const formattedMessages = messages.map((msg) => ({
-      messageId: msg.id,
-      content: msg.content,
-      senderId: msg.senderId,
-      senderType: msg.senderType.toLowerCase(),
-      senderName: msg.senderType === "GUEST" ? "Guest" : "Staff",
-      sentAt: msg.createdAt,
-      isRead: msg.isRead,
-    }));
-
     res.status(200).json({
       status: "success",
       data: {
-        messages: formattedMessages,
+        messages,
       },
     });
   };
 
   getMyConversations = async (req, res, next) => {
     const { userId } = req.user;
-    const { status } = req.query;
 
     const conversations = await this.#chatService.getMyConversations({
       userId,
-      status,
     });
 
     res.status(200).json({

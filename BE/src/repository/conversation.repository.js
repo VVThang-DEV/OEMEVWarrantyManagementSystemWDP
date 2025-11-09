@@ -91,26 +91,9 @@ class ConversationRepository {
     );
   };
 
-  getConversationsByStaffId = async (
-    staffId,
-    status = null,
-    transaction = null
-  ) => {
-    const { Op } = db.Sequelize;
-
-    // Build where clause
-    const whereClause = {
-      [Op.or]: [{ staffId: staffId }, { status: "UNASSIGNED" }],
-    };
-
-    // Add status filter if provided
-    if (status) {
-      whereClause.status = status;
-    }
-
-    // Get conversations assigned to this staff OR unassigned conversations
+  getConversationsByStaffId = async (staffId, transaction = null) => {
     const conversations = await Conversation.findAll({
-      where: whereClause,
+      where: { staffId: staffId },
       include: [
         {
           model: db.Guest,
