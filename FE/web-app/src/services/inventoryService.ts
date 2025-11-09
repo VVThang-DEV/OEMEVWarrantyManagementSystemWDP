@@ -37,6 +37,29 @@ export interface TypeComponentStock {
   availableQuantity: number;
 }
 
+// ✅ Raw API response structure for stock items
+export interface StockItemFromAPI {
+  stockId: string;
+  warehouseId: string;
+  typeComponentId: string;
+  quantityInStock: number;
+  quantityReserved: number;
+  quantityAvailable: number;
+  warehouse: {
+    warehouseId: string;
+    name: string;
+    serviceCenterId: string | null;
+    vehicleCompanyId: string;
+  };
+  typeComponent: {
+    typeComponentId: string;
+    name: string;
+    sku: string;
+    category: string;
+    price: number;
+  };
+}
+
 export interface ComponentDetail {
   componentId: string;
   serialNumber: string;
@@ -143,12 +166,10 @@ export interface CreateAdjustmentOUT {
   adjustmentType: "OUT";
   reason: string;
   note?: string;
-  quantity: number;
+  components: { serialNumber: string }[];
 }
 
-export type CreateAdjustmentRequest =
-  | CreateAdjustmentIN
-  | CreateAdjustmentOUT;
+export type CreateAdjustmentRequest = CreateAdjustmentIN | CreateAdjustmentOUT;
 
 // ============================================================
 // ✅ HELPERS – CLEAN PARAMS
@@ -190,12 +211,12 @@ export async function getInventorySummary(
 
 export async function getTypeComponents(
   warehouseId: string
-): Promise<TypeComponentStock[]> {
+): Promise<StockItemFromAPI[]> {
   const response = await apiClient.get("/inventory/type-components", {
     params: cleanParams({ warehouseId }),
   });
 
-  return response.data.data.typeComponents ?? [];
+  return response.data.data.components?.typeComponents ?? [];
 }
 
 export async function getComponentsByType(
@@ -262,12 +283,9 @@ export async function getStockHistory(
   page = 1,
   limit = 20
 ): Promise<StockHistoryResponse> {
-  const response = await apiClient.get(
-    `/inventory/stocks/${stockId}/history`,
-    {
-      params: cleanParams({ page, limit }),
-    }
-  );
+  const response = await apiClient.get(`/inventory/stocks/${stockId}/history`, {
+    params: cleanParams({ page, limit }),
+  });
 
   return response.data.data;
 }

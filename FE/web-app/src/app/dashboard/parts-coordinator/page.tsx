@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Home, Package, Settings, Boxes } from "lucide-react";
+import { Home, Package, Settings, Boxes, Clock1 } from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
 
@@ -18,7 +18,11 @@ import { InventoryDashboard } from "@/components/inventory";
 import AllocateComponentModal from "@/components/dashboard/partscoordinatordashboard/AllocationModal";
 import TransferComponentModal from "@/components/dashboard/partscoordinatordashboard/TransferModal";
 import { ComponentReturnList } from "@/components/dashboard/partscoordinatordashboard/ComponentReturnList";
-
+import { StockHistoryList } from "@/components/dashboard/partscoordinatordashboard/StockHistoryList";
+import { AdjustmentList } from "@/components/dashboard/partscoordinatordashboard/AdjustmentList";
+import { CreateAdjustmentModal } from "@/components/dashboard/partscoordinatordashboard/CreateAdjustmentModal";
+import { Clock } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 interface CurrentUser {
   userId: string;
   username?: string;
@@ -61,8 +65,8 @@ export default function PartsCoordinatorDashboard() {
   const navItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
     { id: "inventory", icon: Boxes, label: "Inventory" },
-    { id: "adjustments", icon: Clock, label: "Adjustments" },
-    { id: "stock-history", icon: Clock, label: "Stock History" },
+    { id: "adjustments", icon: Clock1, label: "Adjustments" },
+    { id: "stock-history", icon: Clock1, label: "Stock History" },
     { id: "pickups", icon: Package, label: "Component Pickups" },
     { id: "status", icon: Settings, label: "Component Status" },
   ];
@@ -126,7 +130,7 @@ export default function PartsCoordinatorDashboard() {
             <div className="p-8">
               <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-indigo-600" />
+                  <Clock1 className="w-5 h-5 text-indigo-600" />
                   Stock History
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
@@ -135,7 +139,7 @@ export default function PartsCoordinatorDashboard() {
               </div>
 
               <div className="mt-6">
-                <StockHistoryList stockId={warehouseId} />
+                <StockHistoryList warehouseId={warehouseId} />
               </div>
             </div>
           </div>

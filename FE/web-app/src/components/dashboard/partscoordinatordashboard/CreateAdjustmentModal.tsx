@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import inventoryService, {
   CreateAdjustmentRequest,
-  TypeComponentStock,
+  StockItemFromAPI,
 } from "@/services/inventoryService";
 
 export default function CreateAdjustmentModal({
@@ -18,14 +18,13 @@ export default function CreateAdjustmentModal({
   const [tab, setTab] = useState<"IN" | "OUT">("IN");
   const [loading, setLoading] = useState(false);
 
-  const [stockList, setStockList] = useState<TypeComponentStock[]>([]);
+  const [stockList, setStockList] = useState<StockItemFromAPI[]>([]);
   const [stockId, setStockId] = useState("");
 
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
 
   const [serials, setSerials] = useState<string[]>([""]);
-  const [quantity, setQuantity] = useState<number>(1);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -33,7 +32,6 @@ export default function CreateAdjustmentModal({
     setReason("");
     setNote("");
     setSerials([""]);
-    setQuantity(1);
 
     loadStockList();
   }, [isOpen]);
@@ -43,7 +41,7 @@ export default function CreateAdjustmentModal({
       const res = await inventoryService.getTypeComponents(warehouseId);
       const list = Array.isArray(res) ? res : [];
       setStockList(list);
-      setStockId(list.length > 0 ? list[0].typeComponentId : "");
+      setStockId(list.length > 0 ? list[0].stockId : "");
     } catch (err) {
       console.error("Failed to load stock list:", err);
       setStockList([]);
@@ -66,16 +64,10 @@ export default function CreateAdjustmentModal({
     if (!stockId) return "Please select a stock item.";
     if (!reason.trim()) return "Reason is required.";
 
-    if (tab === "IN") {
-      const cleaned = serials.filter((s) => s.trim() !== "");
-      if (cleaned.length === 0)
-        return "At least one serial number is required.";
-      if (new Set(cleaned).size !== cleaned.length)
-        return "Serial numbers must be unique.";
-    }
-
-    if (tab === "OUT" && quantity <= 0)
-      return "Quantity must be greater than zero.";
+    const cleaned = serials.filter((s) => s.trim() !== "");
+    if (cleaned.length === 0) return "At least one serial number is required.";
+    if (new Set(cleaned).size !== cleaned.length)
+      return "Serial numbers must be unique.";
 
     return null;
   };
@@ -105,7 +97,9 @@ export default function CreateAdjustmentModal({
           adjustmentType: "OUT",
           reason,
           note,
-          quantity,
+          components: serials
+            .filter((s) => s.trim() !== "")
+            .map((s) => ({ serialNumber: s })),
         };
       }
 
@@ -153,7 +147,7 @@ export default function CreateAdjustmentModal({
             <p className="text-sm text-gray-500 mt-1">
               {tab === "IN"
                 ? "Add new components into warehouse inventory"
-                : "Remove quantity from warehouse inventory"}
+                : "Remove components from warehouse inventory by serial numbers"}
             </p>
           </div>
 
@@ -193,7 +187,7 @@ export default function CreateAdjustmentModal({
               Component *
             </label>
             <select
-              className="w-full border border-black rounded-lg px-3 py-2 bg-white placeholder-black"
+              className="w-full border border-black rounded-lg px-3 py-2 bg-white text-black placeholder-black"
               value={stockId}
               onChange={(e) => setStockId(e.target.value)}
             >
@@ -201,8 +195,8 @@ export default function CreateAdjustmentModal({
                 <option value="">No stock available</option>
               ) : (
                 stockList.map((s) => (
-                  <option key={s.typeComponentId} value={s.typeComponentId}>
-                    {s.typeComponentName} — Available: {s.availableQuantity}
+                  <option key={s.stockId} value={s.stockId}>
+                    {s.typeComponent.name} — Available: {s.quantityAvailable}
                   </option>
                 ))
               )}
@@ -269,18 +263,37 @@ export default function CreateAdjustmentModal({
 
           {/* OUT MODE */}
           {tab === "OUT" && (
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-sm font-medium text-black">
-                Quantity *
+                Serial Numbers * (Components to Remove)
               </label>
-              <input
-                type="number"
-                min={1}
-                className="w-full border border-black rounded-lg px-3 py-2 bg-white placeholder-black"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                placeholder="Enter quantity"
-              />
+
+              {serials.map((s, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <input
+                    className="flex-1 border border-black rounded-lg px-3 py-2 bg-white placeholder-black"
+                    value={s}
+                    placeholder="Serial Number"
+                    onChange={(e) => updateSerial(i, e.target.value)}
+                  />
+
+                  {serials.length > 1 && (
+                    <button
+                      onClick={() => removeSerial(i)}
+                      className="px-3 text-red-500 hover:text-red-700"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                onClick={() => setSerials([...serials, ""])}
+                className="text-sm text-red-600 font-medium hover:underline"
+              >
+                + Add Serial
+              </button>
             </div>
           )}
         </div>
@@ -306,3 +319,4 @@ export default function CreateAdjustmentModal({
     </div>
   );
 }
+export { CreateAdjustmentModal };

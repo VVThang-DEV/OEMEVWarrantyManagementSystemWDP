@@ -272,3 +272,5 @@ export default function AdjustmentList() {
     </div>
   );
 }
+
+export { AdjustmentList };
