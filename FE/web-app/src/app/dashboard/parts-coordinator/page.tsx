@@ -9,7 +9,6 @@ import {
   Sidebar,
   DashboardHeader,
   PartsCoordinatorDashboardOverview,
-  ComponentPickupList,
   ComponentStatusManager,
 } from "@/components/dashboard";
 
@@ -21,7 +20,8 @@ import { ComponentReturnList } from "@/components/dashboard/partscoordinatordash
 import { StockHistoryList } from "@/components/dashboard/partscoordinatordashboard/StockHistoryList";
 import { AdjustmentList } from "@/components/dashboard/partscoordinatordashboard/AdjustmentList";
 import { CreateAdjustmentModal } from "@/components/dashboard/partscoordinatordashboard/CreateAdjustmentModal";
-import { Clock } from "lucide-react";
+import ComponentReservationQueue from "@/components/dashboard/partscoordinatordashboard/ComponentReservationQueue";
+import { ComponentPickupList } from "@/components/dashboard/partscoordinatordashboard/ComponentPickupList";
 import { RotateCcw } from "lucide-react";
 interface CurrentUser {
   userId: string;
@@ -67,6 +67,7 @@ export default function PartsCoordinatorDashboard() {
     { id: "inventory", icon: Boxes, label: "Inventory" },
     { id: "adjustments", icon: Clock1, label: "Adjustments" },
     { id: "stock-history", icon: Clock1, label: "Stock History" },
+    { id: "reservations", icon: Package, label: "Reservations" },
     { id: "pickups", icon: Package, label: "Component Pickups" },
     { id: "status", icon: Settings, label: "Component Status" },
   ];
@@ -105,17 +106,6 @@ export default function PartsCoordinatorDashboard() {
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                      <Boxes className="w-6 h-6 text-blue-600" />
-                      Service Center Inventory
-                    </h2>
-
-                    <p className="text-gray-600 text-sm mt-1">
-                      Manage components for your service center
-                    </p>
-                  </div>
-
                   <Inventory />
                 </div>
               )}
@@ -125,87 +115,33 @@ export default function PartsCoordinatorDashboard() {
 
       // ✅ STOCK HISTORY
       case "stock-history":
-        return (
-          <div className="flex-1 overflow-auto">
-            <div className="p-8">
-              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <Clock1 className="w-5 h-5 text-indigo-600" />
-                  Stock History
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  View all stock ledger events for components
-                </p>
-              </div>
+        return <StockHistoryList warehouseId={warehouseId} />;
 
-              <div className="mt-6">
-                <StockHistoryList warehouseId={warehouseId} />
-              </div>
-            </div>
-          </div>
-        );
-
-      // ✅ ADJUSTMENTS PAGE — FIXED
+      // ✅ ADJUSTMENTS PAGE
       case "adjustments":
         return (
-          <div className="flex-1 overflow-auto">
-            <div className="p-8">
-              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-indigo-600" />
-                    Inventory Adjustments
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    View and manage manual inventory adjustments
-                  </p>
-                </div>
+          <>
+            <AdjustmentList
+              onCreateClick={() => setShowCreateAdjustment(true)}
+            />
 
-                {/* ✅ BUTTON OPEN POPUP */}
-                <button
-                  onClick={() => setShowCreateAdjustment(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
-                >
-                  + Create Adjustment
-                </button>
-              </div>
-
-              <div className="mt-6">
-                <AdjustmentList />
-              </div>
-            </div>
-
-            {/* ✅ POPUP CHỈ HIỆN KHI Ở TAB NÀY  */}
+            {/* ✅ POPUP */}
             <CreateAdjustmentModal
               isOpen={showCreateAdjustment}
               onClose={() => setShowCreateAdjustment(false)}
-              warehouseId={warehouseId} // ✅ FIXED REQUIRED PROP
+              warehouseId={warehouseId}
             />
-          </div>
+          </>
         );
+
+      // ✅ RESERVATIONS
+      case "reservations":
+        return <ComponentReservationQueue />;
 
       // ✅ PICKUPS
       case "pickups":
         return (
-          <div className="flex-1 overflow-auto">
-            <div className="p-8">
-              <div className="bg-white rounded-2xl border border-gray-200">
-                <div className="border-b border-gray-200 p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-blue-600" />
-                    Reserved Components Ready for Pickup
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Components waiting to be picked up from warehouse
-                  </p>
-                </div>
-
-                <div className="p-6">
-                  <ComponentPickupList />
-                </div>
-              </div>
-            </div>
-          </div>
+          <ComponentPickupList serviceCenterId={currentUser?.serviceCenterId} />
         );
 
       case "component-returns":

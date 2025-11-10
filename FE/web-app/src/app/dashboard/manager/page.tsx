@@ -18,7 +18,6 @@ import {
   Sidebar,
   DashboardHeader,
   ManagerDashboardOverview,
-  ManagerCasesList,
   CustomerManagement,
   CaseLineOperations,
   ScheduleManagement,
@@ -27,6 +26,7 @@ import {
   WarehouseOverview,
   CreateUserAccount,
 } from "@/components/dashboard";
+import TaskAssignmentList from "@/components/dashboard/managerdashboard/TaskAssignmentList";
 
 interface CurrentUser {
   userId: string;
@@ -103,7 +103,7 @@ export default function ManagerDashboard() {
       case "all-caselines":
         return <AllCaseLinesList />;
       case "tasks":
-        return <ManagerCasesList />;
+        return <TaskAssignmentList />;
       case "schedules":
         return <ScheduleManagement />;
       case "warehouse":

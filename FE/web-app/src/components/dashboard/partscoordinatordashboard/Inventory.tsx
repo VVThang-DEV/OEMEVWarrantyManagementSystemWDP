@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   Send,
   Layers,
+  Boxes,
   Loader,
 } from "lucide-react";
 import AllocateComponentModal from "./AllocationModal";
@@ -105,12 +106,14 @@ export default function Inventory() {
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-gray-900">
+        <div className="mb-6">
+          <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2 pt-2">
+            <Boxes className="w-6 h-6 text-blue-600" />
             Service Center Inventory
           </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Component-level stock management
+
+          <p className="text-gray-600 text-sm mt-2">
+            Manage components for your service center
           </p>
         </div>
         <div className="flex gap-3">
