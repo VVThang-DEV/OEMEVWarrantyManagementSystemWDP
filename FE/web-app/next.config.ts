@@ -7,6 +7,13 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Prevent build-time rendering errors
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = [...(config.externals || []), "framer-motion"];
+    }
+    return config;
+  },
   images: {
     remotePatterns: [
       {
