@@ -111,6 +111,108 @@ class VehicleProcessingRecordRepository {
     return record.toJSON();
   };
 
+  findLatestRecordByVin = async ({ vin }, transaction = null, lock = null) => {
+    const record = await VehicleProcessingRecord.findOne({
+      where: { vin },
+      attributes: [
+        "vehicleProcessingRecordId",
+        "odometer",
+        "checkInDate",
+        "status",
+      ],
+      order: [["checkInDate", "DESC"]],
+      transaction,
+      lock,
+    });
+
+    return record ? record.toJSON() : null;
+  };
+
+  findByTrackingToken = async (token) => {
+    const record = await VehicleProcessingRecord.findOne({
+      where: {
+        trackingToken: token,
+      },
+      attributes: [
+        "vehicleProcessingRecordId",
+        "vin",
+        "checkInDate",
+        "checkOutDate",
+        "odometer",
+        "status",
+      ],
+      include: [
+        {
+          model: User,
+          as: "mainTechnician",
+          attributes: ["userId", "name"],
+        },
+        {
+          model: Vehicle,
+          as: "vehicle",
+          attributes: ["vin"],
+          include: [
+            {
+              model: VehicleModel,
+              as: "model",
+              attributes: [["vehicle_model_name", "name"], "vehicleModelId"],
+              include: [
+                {
+                  model: VehicleCompany,
+                  as: "company",
+                  attributes: ["vehicleCompanyId", "name"],
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: GuaranteeCase,
+          as: "guaranteeCases",
+          attributes: ["guaranteeCaseId", "status", "contentGuarantee"],
+          required: false,
+          include: [
+            {
+              model: CaseLine,
+              as: "caseLines",
+              attributes: [
+                "id",
+                "diagnosisText",
+                "correctionText",
+                "warrantyStatus",
+                "status",
+                "rejectionReason",
+                "quantity",
+              ],
+              include: [
+                {
+                  model: TypeComponent,
+                  as: "typeComponent",
+                  attributes: ["typeComponentId", "name", "category"],
+                  required: false,
+                },
+              ],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "createdByStaff",
+          attributes: ["userId", "name", "serviceCenterId"],
+          required: true,
+        },
+      ],
+    });
+
+    if (!record) {
+      return null;
+    }
+
+    return record.toJSON();
+  };
+
   findDetailById = async (
     { id, roleName, userId, serviceCenterId },
     transaction = null,
@@ -141,6 +243,8 @@ class VehicleProcessingRecordRepository {
         "odometer",
         "status",
         "visitorInfo",
+        "checkOutDate",
+        "duration",
       ],
 
       include: [
@@ -262,6 +366,8 @@ class VehicleProcessingRecordRepository {
         "odometer",
         "status",
         "visitorInfo",
+        "checkOutDate",
+        "duration",
       ],
       include: [
         {
@@ -443,6 +549,7 @@ class VehicleProcessingRecordRepository {
         "odometer",
         "status",
         "visitorInfo",
+        "duration",
       ],
       include: [
         {
