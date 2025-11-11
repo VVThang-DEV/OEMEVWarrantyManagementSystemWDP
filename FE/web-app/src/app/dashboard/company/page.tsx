@@ -18,6 +18,7 @@ import TransferComponentModal from "@/components/dashboard/partscoordinatordashb
 import CompanyDashboardOverview from "@/components/dashboard/companydashboard/CompanyDashboardOverview";
 import StockTransferRequestManager from "@/components/dashboard/companydashboard/StockTransferRequestManager";
 import VehicleModelManagement from "@/components/dashboard/companydashboard/VehicleModelManagement";
+import VehicleManagement from "@/components/dashboard/companydashboard/VehicleManagement";
 import WarrantyComponentConfig from "@/components/dashboard/companydashboard/WarrantyComponentConfig";
 
 interface CurrentUser {
@@ -62,7 +63,8 @@ export default function CompanyDashboard() {
       icon: ArrowLeftRight,
       label: "Transfer Requests",
     },
-    { id: "vehicle-models", icon: Car, label: "Vehicle Models" },
+    { id: "vehicles", icon: Car, label: "Vehicles" },
+    { id: "vehicle-models", icon: Shield, label: "Vehicle Models" },
     { id: "warranty-config", icon: Shield, label: "Warranty Config" },
     { id: "settings", icon: Settings, label: "Settings" },
   ];
@@ -125,6 +127,9 @@ export default function CompanyDashboard() {
             </div>
           </div>
         );
+
+      case "vehicles":
+        return <VehicleManagement />;
 
       case "vehicle-models":
         return (
