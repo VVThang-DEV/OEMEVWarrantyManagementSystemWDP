@@ -108,6 +108,34 @@ export default function StaffChatDashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTab]);
 
+  // Auto-open conversation when navigating from notification
+  useEffect(() => {
+    const notificationId = sessionStorage.getItem("selectedItemId");
+    const notificationType = sessionStorage.getItem("selectedItemType");
+
+    if (
+      notificationType === "chat-support" &&
+      notificationId &&
+      conversations.length > 0
+    ) {
+      // Find the conversation by ID
+      const conversation = conversations.find(
+        (c) => c.conversationId === notificationId
+      );
+      if (conversation) {
+        setActiveConversation(conversation);
+        // Switch to the appropriate tab
+        setSelectedTab(
+          conversation.status as "UNASSIGNED" | "ACTIVE" | "CLOSED"
+        );
+      }
+
+      // Clear storage
+      sessionStorage.removeItem("selectedItemId");
+      sessionStorage.removeItem("selectedItemType");
+    }
+  }, [conversations]);
+
   useEffect(() => {
     console.log(
       "[Staff] 🔄 useEffect triggered - activeConversation changed:",

@@ -185,6 +185,27 @@ export function CasesList({ onViewDetails }: CasesListProps) {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
 
+  // Auto-open detail modal when navigating from notification
+  useEffect(() => {
+    const notificationId = sessionStorage.getItem("selectedItemId");
+    const notificationType = sessionStorage.getItem("selectedItemType");
+
+    if (notificationType === "cases" && notificationId && records.length > 0) {
+      // Find the record by vehicleProcessingRecordId
+      const record = records.find(
+        (r) => r.vehicleProcessingRecordId === notificationId
+      );
+      if (record) {
+        setSelectedRecord(record);
+        setShowDetailsModal(true);
+      }
+
+      // Clear storage
+      sessionStorage.removeItem("selectedItemId");
+      sessionStorage.removeItem("selectedItemType");
+    }
+  }, [records]);
+
   const handleViewDetails = (record: ProcessingRecord) => {
     setSelectedRecord(record);
     setShowDetailsModal(true);

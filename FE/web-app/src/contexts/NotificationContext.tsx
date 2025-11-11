@@ -227,13 +227,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       "vehicleProcessingRecordStatusUpdated",
       (data: Record<string, unknown>) => {
         console.log("📋 Vehicle processing record updated:", data);
+        const recordId = data.vehicleProcessingRecordId || data.id;
         addNotification({
           type: "case_updated",
           priority: "medium",
           title: "Case Status Updated",
           message: `Vehicle processing record has been updated`,
           timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: { ...data, navigationAction: "cases" },
+          data: {
+            ...data,
+            navigationAction: "cases",
+            navigationId: String(recordId),
+          },
         });
       }
     );
@@ -256,6 +261,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           data: {
             ...data,
             navigationAction: "stock-transfers",
+            navigationId: String(requestId),
+            navigationType: "detail",
             requestId: requestId,
           },
         });
@@ -280,6 +287,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           data: {
             ...data,
             navigationAction: "stock-transfers",
+            navigationId: String(requestId),
+            navigationType: "detail",
             requestId: requestId,
           },
         });
@@ -304,6 +313,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           data: {
             ...data,
             navigationAction: "stock-transfers",
+            navigationId: String(requestId),
+            navigationType: "detail",
             requestId: requestId,
           },
         });
@@ -329,6 +340,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           data: {
             ...data,
             navigationAction: "stock-transfers",
+            navigationId: String(requestId),
+            navigationType: "detail",
             requestId: requestId,
           },
         });
@@ -353,6 +366,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           data: {
             ...data,
             navigationAction: "stock-transfers",
+            navigationId: String(requestId),
+            navigationType: "detail",
             requestId: requestId,
           },
         });
@@ -362,13 +377,63 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // New conversation created (chat)
     socket.on("newConversation", (data: Record<string, unknown>) => {
       console.log("💬 New conversation:", data);
+      const conversationId = data.conversationId || data.id;
       addNotification({
         type: "new_message",
         priority: "medium",
         title: "New Conversation",
         message: `You have a new conversation`,
         timestamp: (data.sentAt as string) || new Date().toISOString(),
-        data: { ...data, navigationAction: "chat-support" },
+        data: {
+          ...data,
+          navigationAction: "chat-support",
+          navigationId: String(conversationId),
+        },
+      });
+    });
+
+    // Inventory adjustment created
+    socket.on(
+      "inventory_adjustment_created",
+      (data: Record<string, unknown>) => {
+        console.log("📦 Inventory adjustment created:", data);
+        const adjustmentType = data.adjustmentType as string;
+        const quantity = data.quantity as number;
+        const reason = data.reason as string;
+
+        addNotification({
+          type: "system_alert",
+          priority: "medium",
+          title: `Inventory ${adjustmentType === "IN" ? "Added" : "Removed"}`,
+          message: `${quantity} item(s) ${
+            adjustmentType === "IN" ? "added to" : "removed from"
+          } inventory. Reason: ${reason}`,
+          timestamp: (data.sentAt as string) || new Date().toISOString(),
+          data: {
+            ...data,
+            navigationAction: "inventory",
+          },
+        });
+      }
+    );
+
+    // Low stock alert
+    socket.on("low_stock_alert", (data: Record<string, unknown>) => {
+      console.log("⚠️ Low stock alert:", data);
+      const stocks = (data.stocks as Record<string, unknown>[]) || [];
+      const stockCount = stocks.length;
+
+      addNotification({
+        type: "system_alert",
+        priority: "high",
+        title: "Low Stock Alert",
+        message: `${stockCount} item(s) are running low on stock`,
+        timestamp: (data.sentAt as string) || new Date().toISOString(),
+        data: {
+          ...data,
+          navigationAction: "inventory",
+          stocks,
+        },
       });
     });
 
