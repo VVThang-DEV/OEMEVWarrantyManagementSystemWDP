@@ -1,22 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Home, Package, RotateCcw, Clock, Settings, Boxes } from "lucide-react";
+import { Home, Package, Settings, Boxes, Clock1 } from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
+
 import {
   Sidebar,
   DashboardHeader,
   PartsCoordinatorDashboardOverview,
-  ComponentPickupList,
   ComponentStatusManager,
 } from "@/components/dashboard";
+
 import Inventory from "@/components/dashboard/partscoordinatordashboard/Inventory";
 import { InventoryDashboard } from "@/components/inventory";
 import AllocateComponentModal from "@/components/dashboard/partscoordinatordashboard/AllocationModal";
 import TransferComponentModal from "@/components/dashboard/partscoordinatordashboard/TransferModal";
 import { ComponentReturnList } from "@/components/dashboard/partscoordinatordashboard/ComponentReturnList";
-
+import { StockHistoryList } from "@/components/dashboard/partscoordinatordashboard/StockHistoryList";
+import { AdjustmentList } from "@/components/dashboard/partscoordinatordashboard/AdjustmentList";
+import { CreateAdjustmentModal } from "@/components/dashboard/partscoordinatordashboard/CreateAdjustmentModal";
+import ComponentReservationQueue from "@/components/dashboard/partscoordinatordashboard/ComponentReservationQueue";
+import { ComponentPickupList } from "@/components/dashboard/partscoordinatordashboard/ComponentPickupList";
+import { RotateCcw } from "lucide-react";
 interface CurrentUser {
   userId: string;
   username?: string;
@@ -27,7 +33,6 @@ interface CurrentUser {
 }
 
 export default function PartsCoordinatorDashboard() {
-  // ✅ Bảo vệ route — chỉ cho phép parts coordinator truy cập
   useRoleProtection([
     "parts_coordinator_service_center",
     "parts_coordinator_company",
@@ -37,40 +42,43 @@ export default function PartsCoordinatorDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
 
+  // ✅ popup create adjustment
+  const [showCreateAdjustment, setShowCreateAdjustment] = useState(false);
+
   useEffect(() => {
     const userInfo = authService.getUserInfo();
-    if (userInfo) {
-      setCurrentUser(userInfo);
-    } else {
-      const user = authService.getCurrentUser();
-      setCurrentUser(user);
-    }
+    if (userInfo) setCurrentUser(userInfo);
+    else setCurrentUser(authService.getCurrentUser());
   }, []);
 
-  const handleLogout = () => {
-    authService.logout();
-  };
+  const handleLogout = () => authService.logout();
 
-  // ✅ Thêm mục "Inventory" mới trong sidebar
+  // ✅ Lấy warehouseId để truyền vào popup
+  const warehouseId =
+    currentUser?.serviceCenterId || currentUser?.companyId || "";
+
+  // ====================== NAV ITEMS ==========================
   const navItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
-    { id: "inventory", icon: Boxes, label: "Inventory" }, // 👈 mới thêm
+    { id: "inventory", icon: Boxes, label: "Inventory" },
+    { id: "adjustments", icon: Clock1, label: "Adjustments" },
+    { id: "stock-history", icon: Clock1, label: "Stock History" },
+    { id: "reservations", icon: Package, label: "Reservations" },
     { id: "pickups", icon: Package, label: "Component Pickups" },
-    { id: "component-returns", icon: RotateCcw, label: "Component Returns" },
     { id: "status", icon: Settings, label: "Component Status" },
   ];
 
-  // ✅ Xử lý hiển thị nội dung theo mục sidebar đang chọn
+  // ==================== PAGE RENDER ==========================
   const renderContent = () => {
     switch (activeNav) {
       case "dashboard":
         return <PartsCoordinatorDashboardOverview />;
 
       case "inventory":
-        // Role-based inventory view
         const isCompanyCoordinator =
           currentUser?.roleName === "parts_coordinator_company";
 
@@ -78,7 +86,6 @@ export default function PartsCoordinatorDashboard() {
           <div className="flex-1 overflow-auto">
             <div className="p-8">
               {isCompanyCoordinator ? (
-                // Company Coordinator: Warehouse-level summary view
                 <div className="space-y-6">
                   <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-200 p-6 shadow-lg">
                     <InventoryDashboard
@@ -87,28 +94,18 @@ export default function PartsCoordinatorDashboard() {
                     />
                   </div>
 
-                  {/* Modals */}
                   <AllocateComponentModal
                     isOpen={showAllocateModal}
                     onClose={() => setShowAllocateModal(false)}
                   />
+
                   <TransferComponentModal
                     isOpen={showTransferModal}
                     onClose={() => setShowTransferModal(false)}
                   />
                 </div>
               ) : (
-                // Service Center Coordinator: Component-level detail view
                 <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                      <Boxes className="w-6 h-6 text-blue-600" />
-                      Service Center Inventory
-                    </h2>
-                    <p className="text-gray-600 text-sm mt-1">
-                      Manage components for your service center
-                    </p>
-                  </div>
                   <Inventory />
                 </div>
               )}
@@ -116,26 +113,35 @@ export default function PartsCoordinatorDashboard() {
           </div>
         );
 
+      // ✅ STOCK HISTORY
+      case "stock-history":
+        return <StockHistoryList warehouseId={warehouseId} />;
+
+      // ✅ ADJUSTMENTS PAGE
+      case "adjustments":
+        return (
+          <>
+            <AdjustmentList
+              onCreateClick={() => setShowCreateAdjustment(true)}
+            />
+
+            {/* ✅ POPUP */}
+            <CreateAdjustmentModal
+              isOpen={showCreateAdjustment}
+              onClose={() => setShowCreateAdjustment(false)}
+              warehouseId={warehouseId}
+            />
+          </>
+        );
+
+      // ✅ RESERVATIONS
+      case "reservations":
+        return <ComponentReservationQueue />;
+
+      // ✅ PICKUPS
       case "pickups":
         return (
-          <div className="flex-1 overflow-auto">
-            <div className="p-8">
-              <div className="bg-white rounded-2xl border border-gray-200">
-                <div className="border-b border-gray-200 p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-blue-600" />
-                    Reserved Components Ready for Pickup
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Components waiting to be picked up from warehouse
-                  </p>
-                </div>
-                <div className="p-6">
-                  <ComponentPickupList />
-                </div>
-              </div>
-            </div>
-          </div>
+          <ComponentPickupList serviceCenterId={currentUser?.serviceCenterId} />
         );
 
       case "component-returns":
@@ -164,26 +170,12 @@ export default function PartsCoordinatorDashboard() {
       case "status":
         return <ComponentStatusManager />;
 
-      case "returns":
-      case "history":
-        return (
-          <div className="flex-1 overflow-auto">
-            <div className="p-8">
-              <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {activeNav === "returns" ? "Returns" : "History"}
-                </h2>
-                <p className="text-sm text-gray-500 mt-2">Coming soon...</p>
-              </div>
-            </div>
-          </div>
-        );
-
       default:
         return <PartsCoordinatorDashboardOverview />;
     }
   };
 
+  // ==================== MAIN LAYOUT ==========================
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar
@@ -209,10 +201,11 @@ export default function PartsCoordinatorDashboard() {
           currentPage={
             activeNav === "dashboard"
               ? undefined
-              : navItems.find((item) => item.id === activeNav)?.label
+              : navItems.find((i) => i.id === activeNav)?.label
           }
           searchValue={searchQuery}
         />
+
         {renderContent()}
       </div>
     </div>

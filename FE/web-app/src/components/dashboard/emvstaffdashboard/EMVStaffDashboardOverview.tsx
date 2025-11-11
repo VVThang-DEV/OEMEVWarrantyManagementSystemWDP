@@ -2,56 +2,38 @@
 
 import { useState, useEffect } from "react";
 import {
-  Building2,
-  Package,
   ArrowLeftRight,
-  Boxes,
   AlertCircle,
+  Package,
+  CheckCircle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import apiClient from "@/lib/apiClient";
-import { authService } from "@/services";
 
 interface DashboardStats {
-  totalWarehouses: number;
-  totalStock: number;
+  totalTransferRequests: number;
   pendingRequests: number;
-  lowStockItems: number;
+  activeRecallCampaigns: number;
+  completedToday: number;
 }
 
-interface StockItem {
-  stockId: string;
-  typeComponentId: string;
-  quantityInStock: number;
-  quantityReserved: number;
-  quantityAvailable: number;
+interface TransferRequest {
+  status: string;
+  updatedAt?: string;
 }
 
-interface Warehouse {
-  warehouseId: string;
-  name: string;
-  stocks?: StockItem[];
-}
-
-interface InventorySummaryItem {
-  warehouseId: string;
-  totalInStock: string;
-  totalReserved: string;
-  totalAvailable: string;
-}
-
-interface CompanyDashboardOverviewProps {
+interface EMVStaffDashboardOverviewProps {
   onNavigate?: (nav: string) => void;
 }
 
-export default function CompanyDashboardOverview({
+export default function EMVStaffDashboardOverview({
   onNavigate,
-}: CompanyDashboardOverviewProps) {
+}: EMVStaffDashboardOverviewProps) {
   const [stats, setStats] = useState<DashboardStats>({
-    totalWarehouses: 0,
-    totalStock: 0,
+    totalTransferRequests: 0,
     pendingRequests: 0,
-    lowStockItems: 0,
+    activeRecallCampaigns: 0,
+    completedToday: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,60 +45,46 @@ export default function CompanyDashboardOverview({
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const user = authService.getUserInfo() || authService.getCurrentUser();
-
-      // Load warehouses
-      const warehousesResponse = await apiClient.get("/warehouses", {
-        params: {
-          context: "COMPANY",
-          entityId: user?.companyId,
-        },
-      });
 
       // Load stock transfer requests
-      const requestsResponse = await apiClient.get("/stock-transfer-requests", {
-        params: {
-          status: "PENDING",
-        },
-      });
-
-      // Load inventory summary
-      const inventoryResponse = await apiClient.get("/inventory/summary");
-
-      // Handle warehouses response
-      const warehouses = warehousesResponse.data?.data?.warehouses || [];
-
-      // Handle stock transfer requests response
-      const requests = requestsResponse.data?.data?.stockTransferRequests || [];
-
-      // Handle inventory summary response
-      const inventorySummary = inventoryResponse.data?.data?.summary || [];
-
-      // Calculate total stock across all warehouses
-      const totalStock = inventorySummary.reduce(
-        (sum: number, warehouse: InventorySummaryItem) => {
-          return sum + parseInt(warehouse.totalInStock || "0", 10);
-        },
-        0
+      const [allRequests, pendingRequests, recallCampaigns] = await Promise.all(
+        [
+          apiClient.get("/stock-transfer-requests"),
+          apiClient.get("/stock-transfer-requests", {
+            params: { status: "PENDING" },
+          }),
+          apiClient.get("/recall-campaigns", {
+            params: { status: "ACTIVE" },
+          }),
+        ]
       );
 
-      // Count low stock items (items with less than 10 in stock)
-      let lowStockCount = 0;
-      warehouses.forEach((warehouse: Warehouse) => {
-        if (warehouse.stocks && Array.isArray(warehouse.stocks)) {
-          warehouse.stocks.forEach((stock: StockItem) => {
-            if (stock.quantityAvailable < 10) {
-              lowStockCount++;
-            }
-          });
+      // Calculate completed today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const allRequestsData =
+        allRequests.data?.data?.stockTransferRequests || [];
+      const completedTodayCount = allRequestsData.filter(
+        (req: TransferRequest) => {
+          if (req.status !== "APPROVED" && req.status !== "COMPLETED")
+            return false;
+          if (!req.updatedAt) return false;
+
+          const updateDate = new Date(req.updatedAt);
+          updateDate.setHours(0, 0, 0, 0);
+
+          return updateDate.getTime() === today.getTime();
         }
-      });
+      ).length;
 
       setStats({
-        totalWarehouses: warehouses.length,
-        totalStock: totalStock,
-        pendingRequests: requests.length,
-        lowStockItems: lowStockCount,
+        totalTransferRequests: allRequestsData.length,
+        pendingRequests:
+          pendingRequests.data?.data?.stockTransferRequests?.length || 0,
+        activeRecallCampaigns:
+          recallCampaigns.data?.data?.campaigns?.length || 0,
+        completedToday: completedTodayCount,
       });
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
@@ -131,40 +99,28 @@ export default function CompanyDashboardOverview({
 
   const statCards = [
     {
-      title: "Company Warehouses",
-      value: stats.totalWarehouses,
-      icon: Building2,
-      color: "gray",
-      bgColor: "bg-white",
+      title: "Total Transfer Requests",
+      value: stats.totalTransferRequests,
+      icon: ArrowLeftRight,
       iconColor: "text-blue-600",
-      borderColor: "border-gray-200",
-    },
-    {
-      title: "Total Stock",
-      value: stats.totalStock,
-      icon: Boxes,
-      color: "gray",
-      bgColor: "bg-white",
-      iconColor: "text-green-600",
-      borderColor: "border-gray-200",
     },
     {
       title: "Pending Requests",
       value: stats.pendingRequests,
-      icon: ArrowLeftRight,
-      color: "gray",
-      bgColor: "bg-white",
+      icon: AlertCircle,
       iconColor: "text-orange-600",
-      borderColor: "border-gray-200",
     },
     {
-      title: "Low Stock Items",
-      value: stats.lowStockItems,
-      icon: AlertCircle,
-      color: "gray",
-      bgColor: "bg-white",
+      title: "Active Recall Campaigns",
+      value: stats.activeRecallCampaigns,
+      icon: Package,
       iconColor: "text-red-600",
-      borderColor: "border-gray-200",
+    },
+    {
+      title: "Completed Today",
+      value: stats.completedToday,
+      icon: CheckCircle,
+      iconColor: "text-green-600",
     },
   ];
 
@@ -202,9 +158,11 @@ export default function CompanyDashboardOverview({
         animate={{ opacity: 1, y: 0 }}
         className="bg-white rounded-2xl border border-gray-200 p-6"
       >
-        <h1 className="text-2xl font-bold text-gray-900">Company Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          EMV Staff Dashboard
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Manage your company warehouses, inventory, and stock transfer requests
+          Manage transfer requests and recall campaigns
         </p>
       </motion.div>
 
@@ -216,7 +174,7 @@ export default function CompanyDashboardOverview({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className={`${card.bgColor} border ${card.borderColor} rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow`}
+            className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between mb-4">
               <div className="p-2 bg-gray-50 rounded-lg">
@@ -246,14 +204,6 @@ export default function CompanyDashboardOverview({
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
-            onClick={() => onNavigate?.("inventory")}
-            className="p-4 border-2 border-blue-200 rounded-xl hover:bg-blue-50 transition-colors text-left"
-          >
-            <Boxes className="w-8 h-8 text-blue-600 mb-2" />
-            <p className="font-semibold text-gray-900">View Inventory</p>
-            <p className="text-sm text-gray-500">Check current stock levels</p>
-          </button>
-          <button
             onClick={() => onNavigate?.("transfer-requests")}
             className="p-4 border-2 border-orange-200 rounded-xl hover:bg-orange-50 transition-colors text-left"
           >
@@ -262,15 +212,18 @@ export default function CompanyDashboardOverview({
             <p className="text-sm text-gray-500">Review pending requests</p>
           </button>
           <button
-            onClick={() => onNavigate?.("vehicle-models")}
-            className="p-4 border-2 border-green-200 rounded-xl hover:bg-green-50 transition-colors text-left"
+            onClick={() => onNavigate?.("recall-campaigns")}
+            className="p-4 border-2 border-red-200 rounded-xl hover:bg-red-50 transition-colors text-left"
           >
-            <Building2 className="w-8 h-8 text-green-600 mb-2" />
-            <p className="font-semibold text-gray-900">Vehicle Models</p>
-            <p className="text-sm text-gray-500">
-              Manage vehicle configurations
-            </p>
+            <AlertCircle className="w-8 h-8 text-red-600 mb-2" />
+            <p className="font-semibold text-gray-900">Recall Campaigns</p>
+            <p className="text-sm text-gray-500">Manage vehicle recalls</p>
           </button>
+          <div className="p-4 border-2 border-gray-200 rounded-xl bg-gray-50">
+            <Package className="w-8 h-8 text-gray-400 mb-2" />
+            <p className="font-semibold text-gray-500">Coming Soon</p>
+            <p className="text-sm text-gray-400">Additional features</p>
+          </div>
         </div>
       </motion.div>
     </div>

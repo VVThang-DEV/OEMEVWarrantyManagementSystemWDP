@@ -834,7 +834,7 @@ export function ScheduleManagement() {
                   accept=".xlsx,.xls"
                   onChange={handleFileSelect}
                   disabled={uploading}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full px-4 py-3 border text-black border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 />
                 {selectedFile && (
                   <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">

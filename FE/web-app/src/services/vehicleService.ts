@@ -266,6 +266,72 @@ export const getVehicleHistory = async (
   }
 };
 
+/**
+ * Download bulk create template Excel file
+ * GET /vehicles/bulk-create-template
+ *
+ * Downloads an Excel template file for bulk vehicle creation.
+ * Only available for parts_coordinator_company role.
+ *
+ * @returns Excel file as blob
+ */
+export const downloadBulkCreateTemplate = async (): Promise<Blob> => {
+  try {
+    const response = await apiClient.get("/vehicles/bulk-create-template", {
+      responseType: "blob",
+    });
+
+    return response.data;
+  } catch (error: unknown) {
+    console.error("Error downloading bulk create template:", error);
+    throw error;
+  }
+};
+
+/**
+ * Bulk create vehicles from Excel file
+ * POST /vehicles/bulk-create
+ *
+ * Upload an Excel file to create multiple vehicles at once.
+ * Only available for parts_coordinator_company role.
+ *
+ * @param file - Excel file containing vehicle data
+ * @returns Result summary with success/failure counts
+ */
+export const bulkCreateVehicles = async (
+  file: File
+): Promise<{
+  status: string;
+  data: {
+    summary: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+    errors?: Array<{
+      row: number;
+      vin?: string;
+      error: string;
+    }>;
+  };
+}> => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await apiClient.post("/vehicles/bulk-create", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    return response.data;
+  } catch (error: unknown) {
+    console.error("Error bulk creating vehicles:", error);
+    throw error;
+  }
+};
+
 const vehicleService = {
   findVehicleByVin,
   checkVehicleWarranty,
@@ -273,6 +339,8 @@ const vehicleService = {
   registerVehicleOwner,
   getVehicleComponents,
   getVehicleHistory,
+  downloadBulkCreateTemplate,
+  bulkCreateVehicles,
 };
 
 export default vehicleService;

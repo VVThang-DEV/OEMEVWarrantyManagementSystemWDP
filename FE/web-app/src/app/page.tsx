@@ -7,6 +7,7 @@ import { WarrantyTypesSection } from "../components/WarrantyTypesSection";
 import { TestimonialsSection } from "../components/TestimonialsSection";
 import { Footer } from "../components/Footer";
 import { GuestChatWidget } from "../components/chat";
+import { TrackingWidget } from "../components/TrackingWidget";
 
 export default function Home() {
   return (
@@ -56,6 +57,7 @@ export default function Home() {
       <Header />
       <main className="pt-20 relative z-10">
         <HeroSection />
+        <TrackingWidget />
         <FeaturesSection />
         <WarrantyTypesSection />
         <TestimonialsSection />

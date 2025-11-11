@@ -10,15 +10,17 @@ import {
   Database,
   FileText,
   ArrowLeftRight,
+  AlertTriangle,
 } from "lucide-react";
-import { authService, warehouseService, Warehouse } from "@/services";
+import { authService } from "@/services";
 import {
   Sidebar,
   DashboardHeader,
   PlaceholderContent,
 } from "@/components/dashboard";
 import StockTransferRequestManager from "@/components/dashboard/companydashboard/StockTransferRequestManager";
-import CompanyDashboardOverview from "@/components/dashboard/companydashboard/CompanyDashboardOverview";
+import EMVStaffDashboardOverview from "@/components/dashboard/emvstaffdashboard/EMVStaffDashboardOverview";
+import RecallCampaignList from "@/components/dashboard/emvstaffdashboard/RecallCampaignList";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
 
 interface CurrentUser {
@@ -34,7 +36,6 @@ export default function EMVStaffDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
 
   useEffect(() => {
     const user = authService.getCurrentUser();
@@ -44,8 +45,8 @@ export default function EMVStaffDashboard() {
 
   const fetchData = async () => {
     try {
-      const warehouseData = await warehouseService.getWarehouseInfo();
-      setWarehouses(warehouseData.warehouses);
+      // Load any necessary data for EMV staff dashboard
+      console.log("EMV Staff dashboard loaded");
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -62,6 +63,7 @@ export default function EMVStaffDashboard() {
       icon: ArrowLeftRight,
       label: "Transfer Requests",
     },
+    { id: "recall-campaigns", icon: AlertTriangle, label: "Recall Campaigns" },
   ];
 
   const renderContent = () => {
@@ -70,7 +72,7 @@ export default function EMVStaffDashboard() {
         return (
           <div className="flex-1 overflow-auto">
             <div className="p-8">
-              <CompanyDashboardOverview />
+              <EMVStaffDashboardOverview onNavigate={setActiveNav} />
             </div>
           </div>
         );
@@ -94,6 +96,15 @@ export default function EMVStaffDashboard() {
                   <StockTransferRequestManager />
                 </div>
               </div>
+            </div>
+          </div>
+        );
+
+      case "recall-campaigns":
+        return (
+          <div className="flex-1 overflow-auto">
+            <div className="p-8">
+              <RecallCampaignList />
             </div>
           </div>
         );

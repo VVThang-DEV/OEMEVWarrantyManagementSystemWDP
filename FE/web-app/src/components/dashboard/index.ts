@@ -25,6 +25,7 @@ export {
   CreateStockTransferRequestModal,
   AllCaseLinesList,
   WarehouseOverview,
+  CreateUserAccount
 } from "./managerdashboard";
 
 // Technician Dashboard Components

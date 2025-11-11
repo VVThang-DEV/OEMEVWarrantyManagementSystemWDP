@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Building2, Boxes, ArrowLeftRight, Settings } from "lucide-react";
+import {
+  Building2,
+  Boxes,
+  ArrowLeftRight,
+  Settings,
+  Car,
+  Shield,
+} from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
 import { Sidebar, DashboardHeader } from "@/components/dashboard";
@@ -10,6 +17,9 @@ import AllocateComponentModal from "@/components/dashboard/partscoordinatordashb
 import TransferComponentModal from "@/components/dashboard/partscoordinatordashboard/TransferModal";
 import CompanyDashboardOverview from "@/components/dashboard/companydashboard/CompanyDashboardOverview";
 import StockTransferRequestManager from "@/components/dashboard/companydashboard/StockTransferRequestManager";
+import VehicleModelManagement from "@/components/dashboard/companydashboard/VehicleModelManagement";
+import VehicleManagement from "@/components/dashboard/companydashboard/VehicleManagement";
+import WarrantyComponentConfig from "@/components/dashboard/companydashboard/WarrantyComponentConfig";
 
 interface CurrentUser {
   userId: string;
@@ -53,13 +63,22 @@ export default function CompanyDashboard() {
       icon: ArrowLeftRight,
       label: "Transfer Requests",
     },
+    { id: "vehicles", icon: Car, label: "Vehicles" },
+    { id: "vehicle-models", icon: Shield, label: "Vehicle Models" },
+    { id: "warranty-config", icon: Shield, label: "Warranty Config" },
     { id: "settings", icon: Settings, label: "Settings" },
   ];
 
   const renderContent = () => {
     switch (activeNav) {
       case "dashboard":
-        return <CompanyDashboardOverview />;
+        return (
+          <div className="flex-1 overflow-auto">
+            <div className="p-8">
+              <CompanyDashboardOverview onNavigate={setActiveNav} />
+            </div>
+          </div>
+        );
 
       case "inventory":
         return (
@@ -105,6 +124,27 @@ export default function CompanyDashboard() {
                   <StockTransferRequestManager />
                 </div>
               </div>
+            </div>
+          </div>
+        );
+
+      case "vehicles":
+        return <VehicleManagement />;
+
+      case "vehicle-models":
+        return (
+          <div className="flex-1 overflow-auto">
+            <div className="p-8">
+              <VehicleModelManagement />
+            </div>
+          </div>
+        );
+
+      case "warranty-config":
+        return (
+          <div className="flex-1 overflow-auto">
+            <div className="p-8">
+              <WarrantyComponentConfig />
             </div>
           </div>
         );
