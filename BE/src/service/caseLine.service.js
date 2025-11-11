@@ -1015,29 +1015,27 @@ class CaseLineService {
         throw new ConflictError("Failed to complete task assignment");
       }
 
-      const record =
-        await this.#vehicleProcessingRecordRepository.findDetailById(
-          {
-            id: guaranteeCase.vehicleProcessingRecord.vehicleProcessingRecordId,
-            roleName,
-            userId,
-            serviceCenterId,
-          },
-          transaction
+      const vehicleProcessingRecordId =
+        guaranteeCase.vehicleProcessingRecord.vehicleProcessingRecordId;
+
+      const allCaseLinesInRecord =
+        await this.#caselineRepository.findByProcessingRecordId(
+          { vehicleProcessingRecordId },
+          transaction,
+          Transaction.LOCK.UPDATE
         );
 
-      const allGuaranteeCases = record?.guaranteeCases || [];
-
-      const allCaseLinesCompleted = allGuaranteeCases.every((gc) =>
-        gc.caseLines?.every((cl) => this.#isFinalCaseLineStatus(cl.status))
-      );
+      const allCaseLinesCompleted =
+        allCaseLinesInRecord.length > 0 &&
+        allCaseLinesInRecord.every((cl) =>
+          this.#isFinalCaseLineStatus(cl.status)
+        );
 
       if (allCaseLinesCompleted) {
         const updatedRecord =
           await this.#vehicleProcessingRecordRepository.updateStatus(
             {
-              vehicleProcessingRecordId:
-                guaranteeCase.vehicleProcessingRecord.vehicleProcessingRecordId,
+              vehicleProcessingRecordId,
               status: "READY_FOR_PICKUP",
             },
             transaction

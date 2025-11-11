@@ -7,10 +7,12 @@ const router = express.Router();
  * @swagger
  * /roles:
  *   get:
- *     summary: Lấy danh sách tất cả vai trò
+ *     summary: Lấy danh sách vai trò
  *     description: >-
- *       Endpoint trả về danh sách tất cả các vai trò có trong hệ thống.
- *       Yêu cầu quyền `parts_coordinator_company`.
+ *       Endpoint trả về danh sách vai trò.
+ *       - Nếu bạn là `emv_admin`, bạn sẽ nhận được tất cả các vai trò.
+ *       - Nếu bạn là `service_center_manager`, bạn sẽ chỉ nhận được các vai trò thuộc trung tâm bảo hành.
+ *       Yêu cầu quyền `emv_admin` hoặc `service_center_manager`.
  *     tags: [Role Management]
  *     security:
  *       - BearerAuth: []
@@ -45,7 +47,7 @@ const router = express.Router();
 router.get(
   "/",
   authentication,
-  authorizationByRole(["parts_coordinator_company"]),
+  authorizationByRole(["emv_admin", "service_center_manager"]),
   async (req, res, next) => {
     const roleController = req.container.resolve("roleController");
     await roleController.getAllRoles(req, res, next);
@@ -59,7 +61,7 @@ router.get(
  *     summary: Lấy thông tin vai trò theo ID
  *     description: >-
  *       Endpoint trả về thông tin chi tiết của một vai trò dựa trên ID.
- *       Yêu cầu quyền `parts_coordinator_company`.
+ *       Yêu cầu quyền `service_center_manager`.
  *     tags: [Role Management]
  *     security:
  *       - BearerAuth: []
@@ -102,7 +104,7 @@ router.get(
 router.get(
   "/:id",
   authentication,
-  authorizationByRole(["parts_coordinator_company"]),
+  authorizationByRole(["service_center_manager"]),
   async (req, res, next) => {
     const roleController = req.container.resolve("roleController");
     await roleController.getRoleById(req, res, next);

@@ -1,5 +1,6 @@
 import db from "../models/index.cjs";
-const { Role } = db;
+const { Role, Sequelize } = db;
+const { Op } = Sequelize;
 
 class RoleRepository {
   async findAll() {
@@ -14,6 +15,19 @@ class RoleRepository {
       attributes: ["roleId", "roleName"],
     });
     return role ? role.toJSON() : null;
+  }
+
+  async findByNames(names) {
+    const roles = await Role.findAll({
+      where: {
+        roleName: {
+          [Op.in]: names,
+        },
+      },
+
+      attributes: ["roleId", "roleName"],
+    });
+    return roles.map((role) => role.toJSON());
   }
 }
 

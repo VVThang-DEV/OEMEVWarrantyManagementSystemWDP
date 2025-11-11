@@ -90,12 +90,6 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: [],
         field: "evidence_image_urls",
       },
-
-      recallCampaignId: {
-        type: DataTypes.UUID,
-        allowNull: true,
-        field: "recall_campaign_id",
-      },
     },
     {
       tableName: "case_line",
