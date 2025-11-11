@@ -10,7 +10,13 @@ const nextConfig: NextConfig = {
   // Prevent build-time rendering errors
   webpack: (config, { isServer }) => {
     if (isServer) {
-      config.externals = [...(config.externals || []), "framer-motion"];
+      config.externals = [
+        ...(config.externals || []),
+        "framer-motion",
+        "@react-three/fiber",
+        "@react-three/drei",
+        "three",
+      ];
     }
     return config;
   },
