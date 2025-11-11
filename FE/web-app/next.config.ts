@@ -7,16 +7,12 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Transpile packages that have SSR issues
-  // 2
-  transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
-  // Skip server bundle for client-only libraries
+  // Exclude client-only libraries from server bundle
   experimental: {
     serverComponentsExternalPackages: [
       "three",
       "@react-three/fiber",
       "@react-three/drei",
-      "framer-motion",
     ],
   },
   images: {
