@@ -113,10 +113,10 @@ export function TrackingWidget() {
           transition={{ duration: 0.8 }}
           className="text-center mb-12"
         >
-          <div className="inline-flex items-center px-4 py-2 bg-blue-500/10 backdrop-blur-sm rounded-full border border-blue-500/20 mb-6">
-            <Search className="w-4 h-4 text-blue-400 mr-2" />
-            <span className="text-sm font-medium text-gray-300">
-              Service Tracking
+          <div className="inline-flex items-center gap-3 mb-6 px-4 py-2 rounded-full bg-white/5 border border-white/10">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <span className="text-sm text-blue-300 font-medium tracking-wider">
+             SERVICE TRACKING
             </span>
           </div>
 
