@@ -25,7 +25,7 @@ export function TrackingWidget() {
     <section className="relative py-24 overflow-hidden">
       {/* Background Elements */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/5 to-transparent"></div>
-      
+
       <div className="relative z-10 max-w-4xl mx-auto px-6">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -40,7 +40,7 @@ export function TrackingWidget() {
               Service Tracking
             </span>
           </div>
-          
+
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
             Track Your Vehicle Service
           </h2>
