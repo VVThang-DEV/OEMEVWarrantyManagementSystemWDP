@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // Transpile packages that have SSR issues
+  // 2
   transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
   // Skip server bundle for client-only libraries
   experimental: {
