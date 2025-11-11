@@ -18,6 +18,7 @@ import technicianService, {
 import { CaseDetailsModal } from "./CaseDetailsModal";
 import { ComponentsToInstall } from "./ComponentsToInstall";
 import { RepairsToComplete } from "./RepairsToComplete";
+import { usePolling } from "@/hooks/usePolling";
 
 export function DashboardOverview() {
   const [processingRecords, setProcessingRecords] = useState<
@@ -30,6 +31,23 @@ export function DashboardOverview() {
     recordId: string;
     caseId: string;
   } | null>(null);
+
+  // Real-time polling for processing records
+  const { isPolling } = usePolling(
+    async () => {
+      const response = await technicianService.getAssignedRecords();
+      const allRecords = response.data?.records?.records || [];
+      setProcessingRecords(allRecords);
+      return allRecords;
+    },
+    {
+      interval: 30000, // Poll every 30 seconds
+      enabled: !isLoading && !selectedCase, // Only poll when not loading and no modal open
+      onError: (err) => {
+        console.error("❌ Polling error:", err);
+      },
+    }
+  );
 
   useEffect(() => {
     loadProcessingRecords();
@@ -136,8 +154,18 @@ export function DashboardOverview() {
                     Warranty cases assigned to you
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Wrench className="w-6 h-6 text-blue-600" />
+                <div className="flex items-center gap-3">
+                  {isPolling && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs font-medium text-green-700">
+                        Live Updates
+                      </span>
+                    </div>
+                  )}
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Wrench className="w-6 h-6 text-blue-600" />
+                  </div>
                 </div>
               </div>
               <button
@@ -408,6 +436,19 @@ export function DashboardOverview() {
             vin={selectedCase.vin}
             recordId={selectedCase.recordId}
             caseId={selectedCase.caseId}
+            onNavigateToInstall={() => {
+              handleCloseModal();
+              // Scroll to ComponentsToInstall section
+              const componentsSection = document.querySelector(
+                '[data-section="components-to-install"]'
+              );
+              if (componentsSection) {
+                componentsSection.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }
+            }}
             onSuccess={handleSuccess}
           />
         )}

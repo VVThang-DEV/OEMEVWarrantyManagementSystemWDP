@@ -6,6 +6,7 @@ import { Package, Wrench } from "lucide-react";
 import caseLineService, { CaseLine } from "@/services/caseLineService";
 import { ComponentInstallModal } from "./ComponentInstallModal";
 import { toast } from "sonner";
+import { usePolling } from "@/hooks/usePolling";
 
 export function ComponentsToInstall() {
   const [components, setComponents] = useState<CaseLine[]>([]);
@@ -16,6 +17,32 @@ export function ComponentsToInstall() {
     vehicleVin: string;
     componentSerial: string;
   } | null>(null);
+
+  // Real-time polling for components to install
+  usePolling(
+    async () => {
+      const response = await caseLineService.getCaseLinesList({
+        status: "IN_REPAIR",
+        limit: 50,
+      });
+      const caseLines = response.data.caseLines || [];
+      const componentsReady = caseLines.filter((cl) => {
+        if (cl.reservations && cl.reservations.length > 0) {
+          return cl.reservations.some((res) => res.status === "PICKED_UP");
+        }
+        return (cl.quantityReserved || 0) > 0;
+      });
+      setComponents(componentsReady);
+      return componentsReady;
+    },
+    {
+      interval: 20000, // Poll every 20 seconds
+      enabled: !loading && !selectedComponent, // Only poll when not loading and no modal open
+      onError: (err) => {
+        console.error("❌ Components polling error:", err);
+      },
+    }
+  );
 
   useEffect(() => {
     loadComponentsToInstall();
@@ -93,6 +120,7 @@ export function ComponentsToInstall() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
+        data-section="components-to-install"
         className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
       >
         <div className="flex items-center justify-between mb-4">

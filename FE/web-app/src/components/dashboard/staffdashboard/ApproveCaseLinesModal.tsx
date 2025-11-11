@@ -9,6 +9,8 @@ import {
   Mail,
   Shield,
   Loader2,
+  ArrowRight,
+  FileCheck,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import caseLineService from "@/services/caseLineService";
@@ -22,6 +24,7 @@ interface ApproveCaseLinesModalProps {
   onSuccess?: () => void;
   customerEmail?: string; // Customer email for OTP verification
   vin?: string; // Vehicle VIN for OTP verification
+  pendingApprovalsCount?: number; // Number of remaining pending approvals
 }
 
 export function ApproveCaseLinesModal({
@@ -32,11 +35,12 @@ export function ApproveCaseLinesModal({
   onSuccess,
   customerEmail,
   vin,
+  pendingApprovalsCount = 0,
 }: ApproveCaseLinesModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
-  const [step, setStep] = useState<"confirm" | "otp">("confirm");
+  const [step, setStep] = useState<"confirm" | "otp" | "success">("confirm");
   const [email, setEmail] = useState(customerEmail || "");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -138,11 +142,15 @@ export function ApproveCaseLinesModal({
 
       await caseLineService.approveCaseLines(payload);
 
-      if (onSuccess) {
-        onSuccess();
+      // Show success step if there are more pending approvals
+      if (pendingApprovalsCount > 0) {
+        setStep("success");
+      } else {
+        if (onSuccess) {
+          onSuccess();
+        }
+        onClose();
       }
-
-      onClose();
     } catch (err) {
       console.error("Error processing case lines:", err);
       setError(
@@ -202,6 +210,35 @@ export function ApproveCaseLinesModal({
 
             {/* Content */}
             <div className="p-6 space-y-4">
+              {/* Success Step */}
+              {step === "success" && (
+                <div className="text-center py-6">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h4 className="text-xl font-bold text-gray-900 mb-2">
+                    {isApprove ? "Approved!" : "Rejected"}
+                  </h4>
+                  <p className="text-gray-600 mb-1">
+                    {caseLineIds.length} case line
+                    {caseLineIds.length !== 1 ? "s" : ""}{" "}
+                    {isApprove ? "approved" : "rejected"} successfully
+                  </p>
+                  {pendingApprovalsCount > 0 && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800 flex items-center justify-center gap-2">
+                        <FileCheck className="w-4 h-4" />
+                        <span className="font-medium">
+                          {pendingApprovalsCount}
+                        </span>{" "}
+                        more approval{pendingApprovalsCount !== 1 ? "s" : ""}{" "}
+                        pending
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {step === "confirm" && (
                 <>
                   {/* Case Line IDs */}
@@ -394,13 +431,15 @@ export function ApproveCaseLinesModal({
 
             {/* Footer */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-2xl flex items-center justify-end gap-3">
-              <button
-                onClick={onClose}
-                disabled={loading}
-                className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
+              {step !== "success" && (
+                <button
+                  onClick={onClose}
+                  disabled={loading}
+                  className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+              )}
 
               {step === "confirm" && (
                 <button
@@ -462,6 +501,35 @@ export function ApproveCaseLinesModal({
                     </>
                   )}
                 </button>
+              )}
+
+              {step === "success" && (
+                <div className="w-full flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      onSuccess?.();
+                      onClose();
+                    }}
+                    className="w-full px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    <FileCheck className="w-4 h-4" />
+                    Continue to Next Approval
+                    {pendingApprovalsCount > 0 && (
+                      <span className="ml-1 text-xs bg-blue-700 px-2 py-0.5 rounded-full">
+                        {pendingApprovalsCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      onSuccess?.();
+                      onClose();
+                    }}
+                    className="w-full px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    Back to Dashboard
+                  </button>
+                </div>
               )}
             </div>
           </motion.div>

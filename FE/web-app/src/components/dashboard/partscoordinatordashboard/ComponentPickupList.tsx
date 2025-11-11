@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import componentReservationService from "@/services/componentReservationService";
 import { useAuth } from "@/hooks/useAuth";
+import { usePolling } from "@/hooks/usePolling";
 
 interface ComponentPickupListProps {
   serviceCenterId?: string;
@@ -31,6 +32,43 @@ export function ComponentPickupList({
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pickingUp, setPickingUp] = useState<string | null>(null);
+
+  // Real-time polling for pickup list (critical - 15s interval)
+  const { isPolling } = usePolling(
+    async () => {
+      const response =
+        await componentReservationService.getComponentReservations({
+          status: "RESERVED",
+          limit: 100,
+          sortBy: "createdAt",
+          sortOrder: "DESC",
+        });
+
+      const reservationsList = response.data.reservations || [];
+      const items: ReservationItem[] = reservationsList.map((reservation) => ({
+        caseLineId: reservation.caselineId,
+        reservationId: reservation.reservationId,
+        componentName: reservation.component?.serialNumber || "Component",
+        componentId: reservation.componentId,
+        quantity: reservation.quantityReserved,
+        status: reservation.status,
+        createdAt: reservation.createdAt,
+        vehicleVin: reservation.caseLine?.id || "",
+        caseNumber: reservation.caselineId,
+        typeComponentId: reservation.componentId,
+      }));
+
+      setReservations(items);
+      return items;
+    },
+    {
+      interval: 15000, // Poll every 15 seconds (critical for parts coordination)
+      enabled: !loading && !pickingUp,
+      onError: (err) => {
+        console.error("❌ Pickup list polling error:", err);
+      },
+    }
+  );
 
   const fetchReservations = async () => {
     try {
@@ -116,11 +154,21 @@ export function ComponentPickupList({
         >
           {/* Header */}
           <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <Package className="w-8 h-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">
-                Component Pickups
-              </h1>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <Package className="w-8 h-8 text-blue-600" />
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Component Pickups
+                </h1>
+              </div>
+              {isPolling && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-green-700">
+                    Live Updates
+                  </span>
+                </div>
+              )}
             </div>
             <p className="text-gray-600">
               Reserved components ready for pickup

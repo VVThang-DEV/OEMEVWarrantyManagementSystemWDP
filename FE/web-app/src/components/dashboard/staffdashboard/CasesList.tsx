@@ -15,7 +15,6 @@ import {
   Loader2,
   X,
   FileText,
-  Eye,
   List,
   CheckSquare,
 } from "lucide-react";
@@ -24,6 +23,7 @@ import { Pagination } from "@/components/ui";
 import { CaseLineDetailModal } from "./CaseLineDetailModal";
 import { ApproveCaseLinesModal } from "./ApproveCaseLinesModal";
 import { CompleteRecordModal } from "./CompleteRecordModal";
+import { usePolling } from "@/hooks/usePolling";
 
 interface CasesListProps {
   onViewDetails?: (record: ProcessingRecord) => void;
@@ -95,7 +95,43 @@ export function CasesList({ onViewDetails }: CasesListProps) {
   );
   const [selectedCaseLineIds, setSelectedCaseLineIds] = useState<string[]>([]);
 
+  // Calculate pending approvals count across all records
+  const pendingApprovalsCount = records.filter((r) =>
+    r.guaranteeCases?.some((gc) =>
+      gc.caseLines?.some((cl) => cl.status === "PENDING_APPROVAL")
+    )
+  ).length;
+
   const itemsPerPage = 6;
+
+  // Real-time polling for records
+  const { isPolling } = usePolling(
+    async () => {
+      const response = await processingRecordService.getAllRecords({
+        ...(statusFilter !== "ALL" && { status: statusFilter }),
+      });
+      const recordsData =
+        (response as any)?.data?.records?.records ||
+        response.data?.records ||
+        (response as any)?.records ||
+        [];
+      const validRecords = Array.isArray(recordsData) ? recordsData : [];
+      setRecords(validRecords);
+      return validRecords;
+    },
+    {
+      interval: 30000, // Poll every 30 seconds
+      enabled:
+        !loading &&
+        !showDetailsModal &&
+        !showCaseLineModal &&
+        !showApprovalModal &&
+        !showCompleteModal, // Only poll when no modals open
+      onError: (err) => {
+        console.error("❌ Polling error:", err);
+      },
+    }
+  );
 
   useEffect(() => {
     fetchRecords();
@@ -198,12 +234,24 @@ export function CasesList({ onViewDetails }: CasesListProps) {
       <div className="p-8">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Warranty Claims & Cases
-          </h2>
-          <p className="text-gray-600 mt-1">
-            View and manage all warranty claims and processing records
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Warranty Claims & Cases
+              </h2>
+              <p className="text-gray-600 mt-1">
+                View and manage all warranty claims and processing records
+              </p>
+            </div>
+            {isPolling && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-green-700">
+                  Live Updates Active
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Filters */}
@@ -825,6 +873,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
           }}
           caseLineIds={selectedCaseLineIds}
           action={approvalAction}
+          pendingApprovalsCount={pendingApprovalsCount}
           onSuccess={() => {
             setShowApprovalModal(false);
             setSelectedCaseLineIds([]);

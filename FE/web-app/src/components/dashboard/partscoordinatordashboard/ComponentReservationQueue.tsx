@@ -13,11 +13,13 @@ import {
   AlertCircle,
   Filter,
 } from "lucide-react";
+import { usePolling } from "@/hooks/usePolling";
 
 export default function ComponentReservationQueue() {
   const [loading, setLoading] = useState(true);
   const [reservations, setReservations] = useState<ComponentReservation[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [pagination, setPagination] = useState({
     total: 0,
@@ -25,6 +27,54 @@ export default function ComponentReservationQueue() {
     limit: 20,
     totalPages: 1,
   });
+
+  // Real-time polling for reservations (critical - 15s interval)
+  const { isPolling } = usePolling(
+    async () => {
+      const params: GetComponentReservationsParams = {
+        page: currentPage,
+        limit: 20,
+      };
+
+      if (
+        statusFilter &&
+        (statusFilter === "RESERVED" ||
+          statusFilter === "PICKED_UP" ||
+          statusFilter === "INSTALLED" ||
+          statusFilter === "RETURNED" ||
+          statusFilter === "CANCELLED")
+      ) {
+        params.status = statusFilter as
+          | "RESERVED"
+          | "PICKED_UP"
+          | "INSTALLED"
+          | "RETURNED"
+          | "CANCELLED";
+      }
+
+      const result = await componentReservationService.getComponentReservations(
+        params
+      );
+
+      setReservations(result.data.reservations || []);
+      if (result.data.pagination) {
+        setPagination({
+          total: result.data.pagination.total,
+          page: result.data.pagination.page,
+          limit: result.data.pagination.limit,
+          totalPages: result.data.pagination.totalPages,
+        });
+      }
+      return result.data.reservations;
+    },
+    {
+      interval: 15000, // Poll every 15 seconds (critical for parts coordination)
+      enabled: !loading,
+      onError: (err) => {
+        console.error("❌ Reservation polling error:", err);
+      },
+    }
+  );
 
   useEffect(() => {
     loadReservations(1, statusFilter);
@@ -82,6 +132,7 @@ export default function ComponentReservationQueue() {
 
     try {
       await componentReservationService.pickupComponent(reservationId, techId);
+      setCurrentPage(pagination.page); // Keep current page
       loadReservations(pagination.page, statusFilter);
     } catch (err) {
       console.error("Error picking up component:", err);
@@ -132,8 +183,16 @@ export default function ComponentReservationQueue() {
                 </p>
               </div>
 
-              {/* STATUS FILTER */}
+              {/* STATUS FILTER & LIVE INDICATOR */}
               <div className="flex items-center gap-3">
+                {isPolling && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs font-medium text-green-700">
+                      Live Updates
+                    </span>
+                  </div>
+                )}
                 <Filter className="w-5 h-5 text-gray-500" />
                 <select
                   className="border border-gray-300 text-black rounded-lg px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"

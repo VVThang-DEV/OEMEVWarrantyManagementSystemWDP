@@ -15,6 +15,7 @@ import {
 import AllocateComponentModal from "./AllocationModal";
 import TransferComponentModal from "./TransferModal";
 import { warehouseService } from "@/services/warehouseService";
+import { usePolling } from "@/hooks/usePolling";
 
 interface Component {
   id: string;
@@ -33,6 +34,23 @@ export default function Inventory() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [loading, setLoading] = useState(false);
   const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
+
+  // Real-time polling for inventory (20s interval)
+  const { isPolling } = usePolling(
+    async () => {
+      const data = await warehouseService.getComponents();
+      setComponents(data);
+      setFilteredComponents(data);
+      return data;
+    },
+    {
+      interval: 20000, // Poll every 20 seconds
+      enabled: !loading && !isAllocModalOpen && !isTransferModalOpen,
+      onError: (err) => {
+        console.error("❌ Inventory polling error:", err);
+      },
+    }
+  );
 
   // Fetch components
   const fetchComponents = async () => {
@@ -117,6 +135,14 @@ export default function Inventory() {
           </p>
         </div>
         <div className="flex gap-3">
+          {isPolling && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium text-green-700">
+                Live Updates
+              </span>
+            </div>
+          )}
           <button
             onClick={() => setAllocModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all font-medium text-sm"
