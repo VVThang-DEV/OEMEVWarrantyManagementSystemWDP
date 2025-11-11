@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect } from "react";
 import { Home, Package, Settings, Boxes, Clock1 } from "lucide-react";
 import { authService } from "@/services";

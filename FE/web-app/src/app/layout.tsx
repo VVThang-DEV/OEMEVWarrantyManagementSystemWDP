@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     "Leading provider of EV warranty solutions. Protect your electric vehicle investment with our comprehensive coverage, fast claims processing, and nationwide service network.",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function RootLayout({
   children,
 }: Readonly<{
