@@ -7,22 +7,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Don't pre-render dashboard pages at build time
-  output: 'standalone',
-  async headers() {
-    return [
-      {
-        source: '/dashboard/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'no-store, must-revalidate',
-          },
-        ],
-      },
-    ];
-  },
+  // Export as SPA to skip SSR/SSG completely
+  output: "export",
   images: {
+    unoptimized: true, // Required for static export
     remotePatterns: [
       {
         protocol: "https",
