@@ -20,6 +20,7 @@ class VehicleProcessingRecordService {
   #caselineRepository;
   #workScheduleRepository;
   #vehicleService;
+  #mailService;
 
   constructor({
     vehicleProcessingRecordRepository,
@@ -31,6 +32,7 @@ class VehicleProcessingRecordService {
     caselineRepository,
     workScheduleRepository,
     vehicleService,
+    mailService,
   }) {
     this.#vehicleProcessingRecordRepository = vehicleProcessingRecordRepository;
     this.#guaranteeCaseRepository = guaranteeCaseRepository;
@@ -41,154 +43,253 @@ class VehicleProcessingRecordService {
     this.#caselineRepository = caselineRepository;
     this.#workScheduleRepository = workScheduleRepository;
     this.#vehicleService = vehicleService;
+    this.#mailService = mailService;
   }
 
-  createRecord = async ({
-    vin,
-    odometer,
-    guaranteeCases,
-    visitorInfo,
-    createdByStaffId,
-    serviceCenterId,
-    companyId,
-  }) => {
+  createRecord = async (params) => {
+    const { createdByStaffId, companyId, vin, odometer, serviceCenterId } =
+      params;
+
     if (!createdByStaffId || !companyId) {
       throw new ForbiddenError("You don't have permission to create record");
     }
 
-    const rawResult = await db.sequelize.transaction(async (t) => {
-      const existingVehicle = await this.#vehicleRepository.findByVinAndCompany(
-        {
-          vin: vin,
-          companyId: companyId,
-        },
-        t,
+    if (!serviceCenterId) {
+      throw new BadRequestError("serviceCenterId is required to create record");
+    }
+
+    if (
+      !Array.isArray(params?.guaranteeCases) ||
+      params.guaranteeCases.length === 0
+    ) {
+      throw new BadRequestError(
+        "At least one guarantee case is required to create a record"
+      );
+    }
+
+    const parsedOdometer = Number(odometer);
+    if (!Number.isFinite(parsedOdometer) || parsedOdometer < 0) {
+      throw new BadRequestError("Odometer must be a non-negative number");
+    }
+
+    await this.#validateWarrantyStatus(vin, companyId, parsedOdometer);
+
+    const normalizedParams = {
+      ...params,
+      odometer: parsedOdometer,
+    };
+
+    const { newRecord, newGuaranteeCases, owner } =
+      await db.sequelize.transaction(async (t) => {
+        const vehicle = await this.#validateVehicleForCreation(
+          vin,
+          companyId,
+          t
+        );
+        await this.#validateOdometerProgression({
+          vin,
+          odometer: parsedOdometer,
+          transaction: t,
+        });
+        const { newRecord, newGuaranteeCases } =
+          await this.#createRecordAndGuaranteeCases(normalizedParams, t);
+        return { newRecord, newGuaranteeCases, owner: vehicle.owner };
+      });
+
+    this.#sendNotifications(
+      owner,
+      vin,
+      newRecord,
+      serviceCenterId,
+      newRecord.trackingToken
+    );
+
+    return this.#formatCreateRecordResponse(newRecord, newGuaranteeCases);
+  };
+
+  #validateWarrantyStatus = async (vin, companyId, odometer) => {
+    const warrantyStatus =
+      await this.#vehicleService.findVehicleByVinWithWarranty({
+        vin,
+        companyId,
+        odometer,
+      });
+
+    const generalDurationStatus =
+      warrantyStatus?.generalWarranty?.duration?.status;
+    const generalMileageStatus =
+      warrantyStatus?.generalWarranty?.mileage?.status;
+    const hasGeneralWarranty =
+      generalDurationStatus === "ACTIVE" && generalMileageStatus === "ACTIVE";
+
+    const hasComponentWarranty = (
+      warrantyStatus?.componentWarranties ?? []
+    ).some(
+      (cw) =>
+        cw?.duration?.status === "ACTIVE" && cw?.mileage?.status === "ACTIVE"
+    );
+
+    if (!hasGeneralWarranty && !hasComponentWarranty) {
+      throw new ConflictError(
+        "Vehicle and all components are out of warranty, cannot create a record"
+      );
+    }
+  };
+
+  #validateVehicleForCreation = async (vin, companyId, transaction) => {
+    const existingVehicle = await this.#vehicleRepository.findByVinAndCompany(
+      { vin, companyId },
+      transaction,
+      Transaction.LOCK.SHARE
+    );
+
+    if (!existingVehicle) {
+      throw new NotFoundError(`Cannot find vehicle with ${vin}`);
+    }
+
+    if (!existingVehicle?.owner) {
+      throw new NotFoundError(
+        `Vehicle with ${vin} does not have an owner, cannot create a record`
+      );
+    }
+
+    const existingRecord =
+      await this.#vehicleProcessingRecordRepository.findRecordIsNotCompleted(
+        { vin },
+        transaction,
         Transaction.LOCK.SHARE
       );
 
-      if (!existingVehicle) {
-        throw new NotFoundError(`Cannot find vehicle with ${vin}`);
-      }
+    if (existingRecord) {
+      throw new ConflictError("Vehicle already has an active record");
+    }
 
-      if (!existingVehicle?.owner) {
-        throw new NotFoundError(
-          `Vehicle with ${vin} does not have an owner, cannot create a record`
-        );
-      }
+    return existingVehicle;
+  };
 
-      const warrantyStatus =
-        await this.#vehicleService.findVehicleByVinWithWarranty({
-          vin: vin,
-          companyId: companyId,
-          odometer: odometer,
+  #validateOdometerProgression = async ({ vin, odometer, transaction }) => {
+    const latestRecord =
+      await this.#vehicleProcessingRecordRepository.findLatestRecordByVin(
+        { vin },
+        transaction,
+        Transaction.LOCK.SHARE
+      );
+
+    if (!latestRecord) {
+      return;
+    }
+
+    const previousOdometer = Number(latestRecord.odometer);
+    const currentOdometer = Number(odometer);
+
+    if (Number.isNaN(currentOdometer)) {
+      throw new BadRequestError("Odometer must be a valid number");
+    }
+
+    if (
+      !Number.isNaN(previousOdometer) &&
+      currentOdometer <= previousOdometer
+    ) {
+      throw new ConflictError(
+        `New odometer (${currentOdometer}) must be greater than the last record odometer (${previousOdometer})`
+      );
+    }
+  };
+
+  #createRecordAndGuaranteeCases = async (
+    { odometer, createdByStaffId, vin, visitorInfo, guaranteeCases },
+    transaction
+  ) => {
+    const newRecord =
+      await this.#vehicleProcessingRecordRepository.createRecord(
+        {
+          odometer,
+          createdByStaffId,
+          vin,
+          visitorInfo,
+          checkInDate: dayjs(),
+        },
+        transaction
+      );
+
+    if (!newRecord) {
+      throw new Error("Failed to create vehicle processing record");
+    }
+
+    const dataGuaranteeCaseToCreate = guaranteeCases.map((guaranteeCase) => ({
+      ...guaranteeCase,
+      vehicleProcessingRecordId: newRecord.vehicleProcessingRecordId,
+    }));
+
+    const newGuaranteeCases =
+      await this.#guaranteeCaseRepository.createGuaranteeCases(
+        { guaranteeCases: dataGuaranteeCaseToCreate },
+        transaction
+      );
+
+    if (!newGuaranteeCases || newGuaranteeCases.length === 0) {
+      throw new Error("Failed to create guarantee cases");
+    }
+
+    return { newRecord, newGuaranteeCases };
+  };
+
+  #sendNotifications = (
+    owner,
+    vin,
+    newRecord,
+    serviceCenterId,
+    trackingToken
+  ) => {
+    if (owner && owner.email && trackingToken) {
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      const trackingUrl = `${frontendUrl}/track?token=${trackingToken}`;
+      const subject = `Your Vehicle Service Tracking Link for VIN ${vin}`;
+      const html = `
+        <p>Dear ${owner.fullName},</p>
+        <p>Thank you for bringing your vehicle (VIN: ${vin}) for service. You can track the status of your service request using the link below:</p>
+        <p><a href="${trackingUrl}">${trackingUrl}</a></p>
+        <p>Thank you,</p>
+        <p>EMV-OEM Service Team</p>
+      `;
+      this.#mailService
+        .sendMail(
+          owner.email,
+          subject,
+          `Your tracking link is: ${trackingUrl}`,
+          html
+        )
+        .catch((err) => {
+          console.error("Failed to send tracking email:", err);
         });
-
-      const generalDurationStatus =
-        warrantyStatus?.generalWarranty?.duration?.status;
-      const generalMileageStatus =
-        warrantyStatus?.generalWarranty?.mileage?.status;
-
-      const hasGeneralWarranty =
-        generalDurationStatus === "ACTIVE" && generalMileageStatus === "ACTIVE";
-
-      let hasComponentWarranty = false;
-      const componentWarranties = warrantyStatus?.componentWarranties ?? [];
-
-      for (const componentWarranty of componentWarranties) {
-        const durationStatus = componentWarranty?.duration?.status;
-        const mileageStatus = componentWarranty?.mileage?.status;
-
-        if (durationStatus === "ACTIVE" && mileageStatus === "ACTIVE") {
-          hasComponentWarranty = true;
-          break;
-        }
-      }
-
-      if (!hasGeneralWarranty && !hasComponentWarranty) {
-        throw new ConflictError(
-          "Vehicle and all components are out of warranty, cannot create a record"
-        );
-      }
-
-      const existingRecord =
-        await this.#vehicleProcessingRecordRepository.findRecordIsNotCompleted(
-          {
-            vin: vin,
-          },
-          t,
-          Transaction.LOCK.SHARE
-        );
-
-      if (existingRecord) {
-        throw new ConflictError("Vehicle already has an active record");
-      }
-
-      const newRecord =
-        await this.#vehicleProcessingRecordRepository.createRecord(
-          {
-            odometer,
-            createdByStaffId,
-            vin,
-            visitorInfo,
-            checkInDate: dayjs(),
-          },
-          t
-        );
-
-      if (!newRecord) {
-        throw new Error("Failed to create vehicle processing record");
-      }
-
-      const dataGuaranteeCaseToCreate = guaranteeCases.map((guaranteeCase) => {
-        return {
-          ...guaranteeCase,
-          vehicleProcessingRecordId: newRecord?.vehicleProcessingRecordId,
-        };
-      });
-
-      const newGuaranteeCases =
-        await this.#guaranteeCaseRepository.createGuaranteeCases(
-          {
-            guaranteeCases: dataGuaranteeCaseToCreate,
-          },
-          t
-        );
-
-      if (!newGuaranteeCases || newGuaranteeCases.length === 0) {
-        throw new Error("Failed to create guarantee cases");
-      }
-
-      return { newRecord, newGuaranteeCases };
-    });
-
-    const { newRecord, newGuaranteeCases } = rawResult;
-
-    const formatGuaranteeCases = newGuaranteeCases.map((guaranteeCase) => {
-      return {
-        ...guaranteeCase,
-        createdAt: formatUTCtzHCM(newRecord?.createdAt),
-      };
-    });
-
-    const formattedRecord = {
-      ...newRecord,
-      createdAt: formatUTCtzHCM(newRecord?.createdAt),
-
-      guaranteeCases: formatGuaranteeCases,
-    };
+    }
 
     const room = `service_center_manager_${serviceCenterId}`;
     const event = "new_record_notification";
     const payload = {
       message: "A new vehicle processing record has been created",
-      record: formattedRecord,
+      record: {
+        ...newRecord,
+        createdAt: formatUTCtzHCM(newRecord.createdAt),
+      },
       room: room,
       sendAt: dayjs(),
     };
 
     this.#notificationService.sendToRoom(room, event, payload);
+  };
 
-    return formattedRecord;
+  #formatCreateRecordResponse = (newRecord, newGuaranteeCases) => {
+    const formatGuaranteeCases = newGuaranteeCases.map((guaranteeCase) => ({
+      ...guaranteeCase,
+      createdAt: formatUTCtzHCM(newRecord.createdAt),
+    }));
+
+    return {
+      ...newRecord,
+      createdAt: formatUTCtzHCM(newRecord.createdAt),
+      guaranteeCases: formatGuaranteeCases,
+    };
   };
 
   cancelRecord = async ({
@@ -603,100 +704,120 @@ class VehicleProcessingRecordService {
   };
 
   completeRecord = async ({ vehicleProcessingRecordId }) => {
-    const rawResult = await db.sequelize.transaction(async (transaction) => {
-      const record = await this.#vehicleProcessingRecordRepository.findByPk(
-        vehicleProcessingRecordId,
+    const completedRecord = await db.sequelize.transaction(
+      async (transaction) => {
+        await this.#findAndValidateRecord(
+          vehicleProcessingRecordId,
+          transaction
+        );
+
+        await this.#validateGuaranteeCases(
+          vehicleProcessingRecordId,
+
+          transaction
+        );
+
+        await this.#validateCaseLines(vehicleProcessingRecordId, transaction);
+
+        return this.#vehicleProcessingRecordRepository.completeRecord(
+          {
+            vehicleProcessingRecordId,
+
+            status: "COMPLETED",
+
+            checkOutDate: new Date(),
+          },
+
+          transaction
+        );
+      }
+    );
+
+    if (!completedRecord) {
+      return null;
+    }
+
+    return {
+      ...completedRecord,
+
+      checkOutDate: completedRecord.checkOutDate
+        ? formatUTCtzHCM(completedRecord.checkOutDate)
+        : null,
+    };
+  };
+
+  #findAndValidateRecord = async (vehicleProcessingRecordId, transaction) => {
+    const record = await this.#vehicleProcessingRecordRepository.findByPk(
+      vehicleProcessingRecordId,
+      transaction,
+      Transaction.LOCK.UPDATE
+    );
+
+    if (!record) {
+      throw new NotFoundError(
+        `Processing record with ID ${vehicleProcessingRecordId} not found`
+      );
+    }
+
+    const validStatuses = ["READY_FOR_PICKUP"];
+    if (!validStatuses.includes(record.status)) {
+      throw new ConflictError(
+        `Cannot complete record with status ${
+          record.status
+        }. Record must be in one of these statuses: ${validStatuses.join(", ")}`
+      );
+    }
+
+    return record;
+  };
+
+  #validateGuaranteeCases = async (vehicleProcessingRecordId, transaction) => {
+    const guaranteeCases = await this.#guaranteeCaseRepository.findByRecordId(
+      { vehicleProcessingRecordId },
+      transaction
+    );
+
+    if (!guaranteeCases || guaranteeCases.length === 0) {
+      throw new NotFoundError("No guarantee cases found for this record");
+    }
+
+    for (const gc of guaranteeCases) {
+      if (gc.status !== "DIAGNOSED") {
+        throw new ConflictError(
+          `Cannot complete record because guarantee case with ID ${gc.guaranteeCaseId} is in status ${gc.status}. All guarantee cases must be DIAGNOSED before completing the record.`
+        );
+      }
+    }
+  };
+
+  #validateCaseLines = async (vehicleProcessingRecordId, transaction) => {
+    const allCaseLines =
+      await this.#caselineRepository.findByProcessingRecordId(
+        { vehicleProcessingRecordId },
         transaction,
         Transaction.LOCK.UPDATE
       );
 
-      if (!record) {
-        throw new NotFoundError(
-          `Processing record with ID ${vehicleProcessingRecordId} not found`
-        );
-      }
-
-      const validStatuses = ["READY_FOR_PICKUP"];
-      if (!validStatuses.includes(record.status)) {
+    for (const caseLine of allCaseLines) {
+      const finalStatuses = [
+        "COMPLETED",
+        "CANCELLED",
+        "REJECTED_BY_OUT_OF_WARRANTY",
+        "REJECTED_BY_TECH",
+        "REJECTED_BY_CUSTOMER",
+      ];
+      if (!finalStatuses.includes(caseLine.status)) {
         throw new ConflictError(
-          `Cannot complete record with status ${
-            record.status
-          }. Record must be in one of these statuses: ${validStatuses.join(
+          `Cannot complete record because case line with ID ${
+            caseLine.id
+          } is in status ${
+            caseLine.status
+          }. All case lines must be in a final state (${finalStatuses.join(
             ", "
-          )}`
+          )}) before completing the record.`
         );
       }
-
-      const guaranteeCases = await this.#guaranteeCaseRepository.findByRecordId(
-        { vehicleProcessingRecordId },
-        transaction
-      );
-
-      if (!guaranteeCases || guaranteeCases.length === 0) {
-        throw new NotFoundError("No guarantee cases found for this record");
-      }
-
-      for (const gc of guaranteeCases) {
-        if (gc.status !== "DIAGNOSED") {
-          throw new ConflictError(
-            `Cannot complete record because guarantee case with ID ${gc.guaranteeCaseId} is in status ${gc.status}. All guarantee cases must be DIAGNOSED before completing the record.`
-          );
-        }
-      }
-
-      const allCaseLines =
-        await this.#caselineRepository.findByProcessingRecordId(
-          { vehicleProcessingRecordId },
-          transaction,
-          Transaction.LOCK.UPDATE
-        );
-
-      for (const caseLine of allCaseLines) {
-        const finalStatuses = [
-          "COMPLETED",
-          "CANCELLED",
-          "REJECTED_BY_OUT_OF_WARRANTY",
-          "REJECTED_BY_TECH",
-          "REJECTED_BY_CUSTOMER",
-        ];
-        if (!finalStatuses.includes(caseLine.status)) {
-          throw new ConflictError(
-            `Cannot complete record because case line with ID ${
-              caseLine.id
-            } is in status ${
-              caseLine.status
-            }. All case lines must be in a final state (${finalStatuses.join(
-              ", "
-            )}) before completing the record.`
-          );
-        }
-      }
-
-      const checkOutDate = new Date();
-
-      const completedRecord =
-        await this.#vehicleProcessingRecordRepository.completeRecord(
-          {
-            vehicleProcessingRecordId,
-            status: "COMPLETED",
-            // checkOutDate: checkOutDate,
-          },
-          transaction
-        );
-
-      return completedRecord;
-    });
-
-    if (!rawResult) {
-      return rawResult;
     }
-
-    return {
-      ...rawResult,
-      checkOutDate: rawResult.checkOutDate
-        ? formatUTCtzHCM(rawResult.checkOutDate)
-        : null,
-    };
   };
 
   makeDiagnosisCompleted = async ({

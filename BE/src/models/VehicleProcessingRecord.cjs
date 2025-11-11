@@ -17,6 +17,14 @@ module.exports = (sequelize, DataTypes) => {
         field: "vin",
       },
 
+      trackingToken: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        allowNull: false,
+        unique: true,
+        field: "tracking_token",
+      },
+
       checkInDate: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW,

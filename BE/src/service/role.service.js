@@ -7,8 +7,23 @@ class RoleService {
     this.#roleRepository = roleRepository;
   }
 
-  async getAllRoles() {
-    return await this.#roleRepository.findAll();
+  async getAllRoles({ userRole }) {
+    const ROLE_SERVICE_CENTER = [
+      "service_center_staff",
+      "service_center_technician",
+      "service_center_manager",
+      "parts_coordinator_service_center",
+    ];
+
+    if (userRole === "service_center_manager") {
+      return await this.#roleRepository.findByNames(ROLE_SERVICE_CENTER);
+    }
+
+    if (userRole === "emv_admin") {
+      return await this.#roleRepository.findAll();
+    }
+
+    return [];
   }
 
   async getRoleById(roleId) {
@@ -21,3 +36,4 @@ class RoleService {
 }
 
 export default RoleService;
+
