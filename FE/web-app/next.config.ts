@@ -7,18 +7,16 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Prevent build-time rendering errors
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals = [
-        ...(config.externals || []),
-        "framer-motion",
-        "@react-three/fiber",
-        "@react-three/drei",
-        "three",
-      ];
-    }
-    return config;
+  // Transpile packages that have SSR issues
+  transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
+  // Skip server bundle for client-only libraries
+  experimental: {
+    serverComponentsExternalPackages: [
+      "three",
+      "@react-three/fiber",
+      "@react-three/drei",
+      "framer-motion",
+    ],
   },
   images: {
     remotePatterns: [
