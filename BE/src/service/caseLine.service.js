@@ -1277,17 +1277,14 @@ class CaseLineService {
   };
 
   #validateStockAvailability = async (stocks, caseline) => {
-    if (stocks.length === 0) {
-      return null;
-    }
-
-    const totalAvailable = stocks.reduce(
-      (total, stock) => total + stock.quantityAvailable,
-      0
-    );
+    const totalAvailable =
+      stocks?.reduce((total, stock) => total + stock.quantityAvailable, 0) || 0;
 
     if (totalAvailable < caseline.quantity) {
-      throw new ConflictError("Insufficient stock available for allocation");
+      const missingQuantity = caseline.quantity - totalAvailable;
+      throw new ConflictError(
+        `Insufficient stock available for allocation. Missing ${missingQuantity} units.`
+      );
     }
   };
 

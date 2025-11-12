@@ -8,6 +8,12 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         field: "guest_id",
       },
+      email: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true,
+        field: "email",
+      },
     },
     {
       tableName: "guest",

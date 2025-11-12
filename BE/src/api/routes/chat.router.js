@@ -12,26 +12,30 @@ const router = express.Router();
  *       Tạo conversation giữa khách (guestId) và Service Center. Không cần authentication.
  *       Backend gửi socket `newConversation` tới phòng `service_center_staff_{serviceCenterId}` để nhân viên biết có khách mới.
  *     tags: [Chat]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - guestId
- *               - serviceCenterId
- *             properties:
- *               guestId:
- *                 type: string
- *                 format: uuid
- *                 description: ID của khách vãng lai (được backend phát sinh trước đó)
- *                 example: "550e8400-e29b-41d4-a716-446655440010"
- *               serviceCenterId:
- *                 type: string
- *                 format: uuid
- *                 description: Service Center nhận cuộc trò chuyện
- *                 example: "550e8400-e29b-41d4-a716-446655440001"
+     requestBody:
+       required: true
+       content:
+         application/json:
+           schema:
+             type: object
+             required:
+               - serviceCenterId
+             properties:
+               guestId:
+                 type: string
+                 format: uuid
+                 description: ID của khách vãng lai (được backend phát sinh trước đó). Không bắt buộc nếu có email.
+                 example: "550e8400-e29b-41d4-a716-446655440010"
+               serviceCenterId:
+                 type: string
+                 format: uuid
+                 description: Service Center nhận cuộc trò chuyện
+                 example: "550e8400-e29b-41d4-a716-446655440001"
+               email:
+                 type: string
+                 format: email
+                 description: Email của khách vãng lai (tùy chọn, nếu muốn lưu lịch sử chat)
+                 example: "guest@example.com"
  *     responses:
  *       201:
  *         description: Anonymous chat created successfully

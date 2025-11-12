@@ -98,7 +98,33 @@ class ConversationRepository {
         {
           model: db.Guest,
           as: "guest",
-          attributes: ["guestId"],
+          attributes: ["guestId", "email"],
+        },
+        {
+          model: db.Message,
+          as: "messages",
+          attributes: ["content", "createdAt", "senderId", "senderType"],
+          separate: true,
+          limit: 1,
+          order: [["createdAt", "DESC"]],
+          required: false,
+        },
+      ],
+      order: [["updatedAt", "DESC"]],
+      transaction: transaction,
+    });
+
+    return conversations.map((conversation) => conversation.toJSON());
+  };
+
+  getConversationsByGuestId = async (guestId, transaction = null) => {
+    const conversations = await Conversation.findAll({
+      where: { guestId: guestId },
+      include: [
+        {
+          model: db.Guest,
+          as: "guest",
+          attributes: ["guestId", "email"],
         },
         {
           model: db.Message,

@@ -1,6 +1,8 @@
 import { Transaction } from "sequelize";
 import { NotFoundError } from "../error/index.js";
 import db from "../models/index.cjs";
+import crypto from "crypto";
+import process from "process";
 
 class ChatService {
   #guestRepository;
@@ -23,9 +25,20 @@ class ChatService {
     this.#chats = chats;
   }
 
-  startAnonymousChat = async ({ guestId, serviceCenterId }) => {
+  startAnonymousChat = async ({ guestId, serviceCenterId, email }) => {
     const rawtResult = await db.sequelize.transaction(async (t) => {
-      const guest = await this.#guestRepository.findOrCreate(guestId, t);
+      let actualGuestId = guestId;
+      let guestEmail = email ? email.toLowerCase() : null;
+
+      if (guestEmail) {
+        const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
+        if (!GUEST_TOKEN_SECRET) {
+          throw new Error("GUEST_TOKEN_SECRET is not defined in environment variables.");
+        }
+        actualGuestId = crypto.createHash('sha256').update(guestEmail + GUEST_TOKEN_SECRET).digest('hex');
+      }
+
+      const guest = await this.#guestRepository.findOrCreate(actualGuestId, t, guestEmail);
 
       const conversation = await this.#conversationRepository.create(
         {
@@ -41,13 +54,33 @@ class ChatService {
     const eventName = "newConversation";
     const data = {
       conversationId: rawtResult.id,
-      guestId: guestId,
+      guestId: rawtResult.guestId, // Use the actual guestId from the created conversation
       serviceCenterId: serviceCenterId,
+      email: email, // Include email in notification
     };
 
     this.#notificationService.sendToRoom(roomName, eventName, data);
 
     return rawtResult;
+  };
+
+  resumeByEmail = async ({ email }) => {
+    const guestEmail = email.toLowerCase();
+    const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
+    if (!GUEST_TOKEN_SECRET) {
+      throw new Error("GUEST_TOKEN_SECRET is not defined in environment variables.");
+    }
+    const persistentGuestId = crypto.createHash('sha256').update(guestEmail + GUEST_TOKEN_SECRET).digest('hex');
+
+    const guest = await this.#guestRepository.findById(persistentGuestId);
+
+    if (!guest) {
+      throw new NotFoundError("No conversations found for this email.");
+    }
+
+    const conversations = await this.#conversationRepository.getConversationsByGuestId(guest.guestId);
+
+    return conversations;
   };
 
   joinAnonymousChat = async ({ userId, conversationId }) => {

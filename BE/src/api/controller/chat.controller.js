@@ -6,17 +6,33 @@ class ChatController {
   }
 
   createAnonymousChat = async (req, res, next) => {
-    const { guestId, serviceCenterId } = req.body;
+    const { guestId, serviceCenterId, email } = req.body;
 
     const conversation = await this.#chatService.startAnonymousChat({
       guestId,
       serviceCenterId,
+      email,
     });
 
     res.status(201).json({
       status: "success",
       data: {
         conversation,
+      },
+    });
+  };
+
+  resumeByEmail = async (req, res, next) => {
+    const { email } = req.body;
+
+    const conversations = await this.#chatService.resumeByEmail({
+      email,
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        conversations,
       },
     });
   };
