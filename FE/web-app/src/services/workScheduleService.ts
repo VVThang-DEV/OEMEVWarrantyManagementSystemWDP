@@ -92,8 +92,30 @@ export interface UpdateScheduleResponse {
 
 class WorkScheduleService {
   /**
+   * Download Excel template for bulk schedule import (Manager only)
+   * GET /work-schedules/bulk-create-template
+   *
+   * @role service_center_manager
+   */
+  async downloadBulkCreateTemplate(): Promise<Blob> {
+    try {
+      const response = await apiClient.get(
+        "/work-schedules/bulk-create-template",
+        {
+          responseType: "blob",
+        }
+      );
+
+      return response.data;
+    } catch (error: unknown) {
+      console.error("Error downloading template:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Upload Excel file for bulk schedule import (Manager only)
-   * POST /work-schedules/upload
+   * POST /work-schedules/bulk-create
    *
    * @role service_center_manager
    */
@@ -103,7 +125,7 @@ class WorkScheduleService {
       formData.append("file", file);
 
       const response = await apiClient.post(
-        "/work-schedules/upload",
+        "/work-schedules/bulk-create",
         formData,
         {
           headers: {
