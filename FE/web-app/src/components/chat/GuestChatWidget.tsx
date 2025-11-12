@@ -20,7 +20,9 @@ import {
   getOrCreateGuestId,
   saveGuestConversationId,
   clearGuestChatSession,
+  resumeByEmail,
   Message,
+  Conversation,
 } from "@/services/chatService";
 import {
   initializeChatSocket,
@@ -48,6 +50,12 @@ export default function GuestChatWidget({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [useEmail, setUseEmail] = useState(false);
+  const [resumeMode, setResumeMode] = useState(false);
+  const [pastConversations, setPastConversations] = useState<Conversation[]>(
+    []
+  );
   const [isTyping, setIsTyping] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
     "idle" | "waiting" | "active" | "closed"
@@ -126,21 +134,30 @@ export default function GuestChatWidget({
       return;
     }
 
+    if (useEmail && !guestEmail.trim()) {
+      setError("Please enter your email");
+      return;
+    }
+
+    if (useEmail && !isValidEmail(guestEmail)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     setIsConnecting(true);
     setError(null);
 
-    // Always start with a fresh guestId to avoid backend issues
-    const freshGuestId = `guest_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
     try {
-      // Start anonymous chat with fresh guestId
-      const session = await startAnonymousChat(freshGuestId, serviceCenterId);
+      // Start anonymous chat with email or guestId
+      const session = await startAnonymousChat(
+        useEmail ? undefined : guestId,
+        serviceCenterId,
+        useEmail ? guestEmail : undefined
+      );
 
-      // Save the working guestId to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("guestChatId", freshGuestId);
+      // Save session info
+      if (useEmail && typeof window !== "undefined") {
+        localStorage.setItem("guestChatEmail", guestEmail);
       }
 
       setConversationId(session.conversationId);
@@ -232,7 +249,7 @@ export default function GuestChatWidget({
       }
 
       // Join the chat room AFTER listeners are set up
-      joinChatRoom(session.conversationId, freshGuestId, "guest");
+      joinChatRoom(session.conversationId, session.guestId, "guest");
 
       // Add welcome message
       setMessages([
@@ -324,8 +341,66 @@ export default function GuestChatWidget({
     setMessages([]);
     setConnectionStatus("idle");
     setGuestName("");
+    setGuestEmail("");
     setInputText("");
     setError(null);
+    setResumeMode(false);
+    setPastConversations([]);
+  };
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const handleResumeChat = async () => {
+    if (!guestEmail.trim()) {
+      setError("Please enter your email");
+      return;
+    }
+
+    if (!isValidEmail(guestEmail)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      const conversations = await resumeByEmail(guestEmail);
+
+      if (conversations.length === 0) {
+        setError("No conversations found for this email.");
+        setIsConnecting(false);
+        return;
+      }
+
+      setPastConversations(conversations);
+      setResumeMode(true);
+      setIsConnecting(false);
+    } catch (err: unknown) {
+      console.error("Failed to resume chat:", err);
+      setError("No conversations found for this email.");
+      setIsConnecting(false);
+    }
+  };
+
+  const handleSelectConversation = async (conv: Conversation) => {
+    setConversationId(conv.conversationId);
+    saveGuestConversationId(conv.conversationId);
+    setConnectionStatus(conv.status === "ACTIVE" ? "active" : "closed");
+    setResumeMode(false);
+
+    // Initialize socket
+    await initializeSocket();
+
+    // Load messages
+    await loadMessages();
+
+    // Join room if active
+    if (conv.status === "ACTIVE" && conv.guest?.guestId) {
+      joinChatRoom(conv.conversationId, conv.guest.guestId, "guest");
+    }
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -460,89 +535,240 @@ export default function GuestChatWidget({
 
             {/* Content */}
             {connectionStatus === "idle" ? (
-              /* Initial Form */
-              <div className="relative flex-1 flex items-center justify-center p-8">
-                <div className="w-full max-w-sm space-y-6 relative z-10">
-                  <div className="text-center mb-8">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.1, type: "spring" }}
-                      className="w-20 h-20 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/30"
-                    >
-                      <MessageCircle className="w-10 h-10 text-white" />
-                    </motion.div>
-                    <motion.h4
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      className="text-2xl font-bold text-white mb-2"
-                    >
-                      Start a Conversation
-                    </motion.h4>
-                    <motion.p
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      className="text-gray-400 text-sm"
-                    >
-                      Connect with our support team instantly
-                    </motion.p>
+              resumeMode ? (
+                /* Past Conversations List */
+                <div className="relative flex-1 overflow-y-auto p-6">
+                  <button
+                    onClick={() => {
+                      setResumeMode(false);
+                      setPastConversations([]);
+                      setError(null);
+                    }}
+                    className="mb-4 text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    ← Back
+                  </button>
+                  <h4 className="text-xl font-bold text-white mb-4">
+                    Your Conversations
+                  </h4>
+                  <div className="space-y-3">
+                    {pastConversations.map((conv) => (
+                      <motion.button
+                        key={conv.conversationId}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => handleSelectConversation(conv)}
+                        className="w-full p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all duration-200 text-left"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <MessageCircle className="w-4 h-4 text-blue-400" />
+                            <span className="text-sm font-medium text-white">
+                              Conversation
+                            </span>
+                          </div>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full ${
+                              conv.status === "ACTIVE"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : "bg-gray-500/20 text-gray-400"
+                            }`}
+                          >
+                            {conv.status}
+                          </span>
+                        </div>
+                        {conv.lastMessage && (
+                          <p className="text-sm text-gray-400 truncate">
+                            {conv.lastMessage.content}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">
+                          {new Date(conv.createdAt).toLocaleDateString()}
+                        </p>
+                      </motion.button>
+                    ))}
                   </div>
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      Your Name
-                    </label>
-                    <input
-                      type="text"
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="Enter your name"
-                      className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
-                    />
-                  </motion.div>
-
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 backdrop-blur-sm"
-                    >
-                      <p className="text-red-300 text-sm">{error}</p>
-                    </motion.div>
-                  )}
-
-                  <motion.button
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    onClick={handleStartChat}
-                    disabled={isConnecting || !guestName.trim()}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-emerald-500 text-white py-4 rounded-xl hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3 font-semibold text-base relative overflow-hidden group"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-blue-500 to-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
-                    {isConnecting ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin relative z-10" />
-                        <span className="relative z-10">Connecting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <MessageCircle className="w-5 h-5 relative z-10" />
-                        <span className="relative z-10">Start Chat</span>
-                      </>
-                    )}
-                  </motion.button>
                 </div>
-              </div>
+              ) : (
+                /* Initial Form */
+                <div className="relative flex-1 flex items-center justify-center p-8 overflow-y-auto">
+                  <div className="w-full max-w-sm space-y-6 relative z-10">
+                    <div className="text-center mb-8">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.1, type: "spring" }}
+                        className="w-20 h-20 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/30"
+                      >
+                        <MessageCircle className="w-10 h-10 text-white" />
+                      </motion.div>
+                      <motion.h4
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-2xl font-bold text-white mb-2"
+                      >
+                        Start a Conversation
+                      </motion.h4>
+                      <motion.p
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-gray-400 text-sm"
+                      >
+                        Connect with our support team instantly
+                      </motion.p>
+                    </div>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        Your Name
+                      </label>
+                      <input
+                        type="text"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Enter your name"
+                        className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
+                      />
+                    </motion.div>
+
+                    {/* Email Option Toggle */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.45 }}
+                      className="flex items-center gap-3"
+                    >
+                      <input
+                        type="checkbox"
+                        id="useEmail"
+                        checked={useEmail}
+                        onChange={(e) => setUseEmail(e.target.checked)}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <label
+                        htmlFor="useEmail"
+                        className="text-sm text-gray-300 cursor-pointer"
+                      >
+                        Save chat history with email (optional)
+                      </label>
+                    </motion.div>
+
+                    {/* Email Input (conditional) */}
+                    {useEmail && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                      >
+                        <label className="block text-sm font-medium text-gray-300 mb-3">
+                          Your Email
+                        </label>
+                        <input
+                          type="email"
+                          value={guestEmail}
+                          onChange={(e) => setGuestEmail(e.target.value)}
+                          onKeyPress={handleKeyPress}
+                          placeholder="your.email@example.com"
+                          className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
+                        />
+                      </motion.div>
+                    )}
+
+                    {error && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 backdrop-blur-sm"
+                      >
+                        <p className="text-red-300 text-sm">{error}</p>
+                      </motion.div>
+                    )}
+
+                    <motion.button
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      onClick={handleStartChat}
+                      disabled={isConnecting || !guestName.trim()}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-emerald-500 text-white py-4 rounded-xl hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3 font-semibold text-base relative overflow-hidden group"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-blue-500 to-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                      {isConnecting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin relative z-10" />
+                          <span className="relative z-10">Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="w-5 h-5 relative z-10" />
+                          <span className="relative z-10">Start Chat</span>
+                        </>
+                      )}
+                    </motion.button>
+
+                    {/* Resume Chat Option */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.6 }}
+                      className="text-center"
+                    >
+                      <div className="relative py-4">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-white/10"></div>
+                        </div>
+                        <div className="relative flex justify-center text-xs">
+                          <span className="px-2 bg-gray-900/50 text-gray-400">
+                            OR
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setResumeMode(false);
+                          setUseEmail(true);
+                          // Show resume form inline
+                        }}
+                        className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        Resume previous chat with email
+                      </button>
+
+                      {/* Resume Form (shown when clicked) */}
+                      {useEmail && guestEmail && (
+                        <motion.button
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          onClick={handleResumeChat}
+                          disabled={isConnecting}
+                          className="mt-3 w-full bg-white/5 border border-white/10 text-white py-3 rounded-xl hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 text-sm"
+                        >
+                          {isConnecting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Loading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <MessageCircle className="w-4 h-4" />
+                              <span>View My Past Chats</span>
+                            </>
+                          )}
+                        </motion.button>
+                      )}
+                    </motion.div>
+                  </div>
+                </div>
+              )
             ) : (
               /* Chat Interface */
               <>
