@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
-import { Home, Package, Settings, Boxes, Clock1 } from "lucide-react";
+import { Home, Package, Settings, Boxes, Clock1, Truck } from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
 
@@ -24,6 +24,7 @@ import { AdjustmentList } from "@/components/dashboard/partscoordinatordashboard
 import { CreateAdjustmentModal } from "@/components/dashboard/partscoordinatordashboard/CreateAdjustmentModal";
 import ComponentReservationQueue from "@/components/dashboard/partscoordinatordashboard/ComponentReservationQueue";
 import { ComponentPickupList } from "@/components/dashboard/partscoordinatordashboard/ComponentPickupList";
+import { StockTransferReceiving } from "@/components/dashboard/partscoordinatordashboard/StockTransferReceiving";
 import { RotateCcw } from "lucide-react";
 interface CurrentUser {
   userId: string;
@@ -63,16 +64,30 @@ export default function PartsCoordinatorDashboard() {
   const warehouseId =
     currentUser?.serviceCenterId || currentUser?.companyId || "";
 
+  const isServiceCenterCoordinator =
+    currentUser?.roleName === "parts_coordinator_service_center";
+
   // ====================== NAV ITEMS ==========================
-  const navItems = [
+  const baseNavItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
     { id: "inventory", icon: Boxes, label: "Inventory" },
     { id: "adjustments", icon: Clock1, label: "Adjustments" },
     { id: "stock-history", icon: Clock1, label: "Stock History" },
     { id: "reservations", icon: Package, label: "Reservations" },
     { id: "pickups", icon: Package, label: "Component Pickups" },
-    { id: "status", icon: Settings, label: "Component Status" },
   ];
+
+  // Add "Receive Shipments" only for Service Center Parts Coordinators
+  const navItems = isServiceCenterCoordinator
+    ? [
+        ...baseNavItems,
+        { id: "receiving", icon: Truck, label: "Receive Shipments" },
+        { id: "status", icon: Settings, label: "Component Status" },
+      ]
+    : [
+        ...baseNavItems,
+        { id: "status", icon: Settings, label: "Component Status" },
+      ];
 
   // ==================== PAGE RENDER ==========================
   const renderContent = () => {
@@ -144,6 +159,31 @@ export default function PartsCoordinatorDashboard() {
       case "pickups":
         return (
           <ComponentPickupList serviceCenterId={currentUser?.serviceCenterId} />
+        );
+
+      // ✅ RECEIVE SHIPMENTS (Only for Service Center Parts Coordinators)
+      case "receiving":
+        // Only show for Service Center Parts Coordinators
+        if (currentUser?.roleName !== "parts_coordinator_service_center") {
+          return (
+            <div className="flex-1 overflow-auto">
+              <div className="p-8">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                  <p className="text-yellow-800">
+                    This feature is only available for Service Center Parts
+                    Coordinators.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="flex-1 overflow-auto">
+            <div className="p-8">
+              <StockTransferReceiving />
+            </div>
+          </div>
         );
 
       case "component-returns":
