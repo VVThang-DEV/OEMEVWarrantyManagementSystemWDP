@@ -4,21 +4,25 @@ type Socket = any; // Using any to avoid importing from socket.io-client
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
 
-// Dynamic import of socket.io-client to avoid SSR issues
+// Use socket.io from CDN (loaded via script tag in layout.tsx)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let io: any = null;
-
-async function getSocketIO() {
+async function getSocketIO(): Promise<any> {
   if (typeof window === "undefined") {
     throw new Error("Socket.IO can only be used on the client side");
   }
 
-  if (!io) {
-    const socketIO = await import("socket.io-client");
-    io = socketIO.io;
+  // Wait for socket.io to load from CDN
+  let attempts = 0;
+  while (!(window as any).io && attempts < 50) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    attempts++;
   }
 
-  return io;
+  if (!(window as any).io) {
+    throw new Error("Socket.IO failed to load from CDN");
+  }
+
+  return (window as any).io;
 }
 
 // ==================== Chat Socket ====================

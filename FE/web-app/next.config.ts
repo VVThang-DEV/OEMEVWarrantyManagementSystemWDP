@@ -44,7 +44,11 @@ const nextConfig: NextConfig = {
 
     // Completely exclude socket.io from server bundle
     if (isServer) {
-      config.externals = [...(config.externals || []), 'socket.io-client', 'engine.io-client'];
+      config.externals = [
+        ...(config.externals || []),
+        "socket.io-client",
+        "engine.io-client",
+      ];
     }
 
     // Ignore node modules warnings
