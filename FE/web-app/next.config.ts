@@ -38,6 +38,11 @@ const nextConfig: NextConfig = {
       };
     }
 
+    // Completely exclude socket.io from server bundle
+    if (isServer) {
+      config.externals = [...(config.externals || []), 'socket.io-client', 'engine.io-client'];
+    }
+
     // Ignore node modules warnings
     config.ignoreWarnings = [
       { module: /node_modules\/socket\.io-client/ },
@@ -46,8 +51,6 @@ const nextConfig: NextConfig = {
 
     return config;
   },
-  // Transpile socket.io packages
-  transpilePackages: ["socket.io-client", "engine.io-client"],
 };
 
 export default nextConfig;
