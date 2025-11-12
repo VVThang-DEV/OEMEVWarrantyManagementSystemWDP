@@ -62,13 +62,11 @@ export function CreateUserAccount() {
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [serviceCenters, setServiceCenters] = useState<ServiceCenter[]>([]);
-  const [vehicleCompanies, setVehicleCompanies] = useState<VehicleCompany[]>(
-    []
-  );
+  const [vehicleCompanies, setVehicleCompanies] = useState<VehicleCompany[]>([]);
   const [loading, setLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-
+  // ===== Fetch Roles & Data =====
   useEffect(() => {
     if (!token || !currentUser) return;
 
@@ -93,7 +91,7 @@ export function CreateUserAccount() {
           setRoles(fetchedRoles);
         }
       } catch {
-        toast.error("Unable to load roles.");
+        toast.error("⚠️ Unable to load roles.");
       }
     };
 
@@ -111,7 +109,7 @@ export function CreateUserAccount() {
         setServiceCenters(scRes.data.data || []);
         setVehicleCompanies(vcRes.data.data || []);
       } catch {
-        toast.error("Unable to load admin data.");
+        toast.error("⚠️ Unable to load admin data.");
       }
     };
 
@@ -119,6 +117,7 @@ export function CreateUserAccount() {
     fetchData();
   }, [token, currentUser?.roleName]);
 
+  // ===== Handle Change =====
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -144,6 +143,7 @@ export function CreateUserAccount() {
     setFormData((p) => ({ ...p, [name]: value }));
   };
 
+  // ===== Handle Submit =====
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -169,12 +169,12 @@ export function CreateUserAccount() {
         const hasSC = !!formData.serviceCenterId;
         const hasVC = !!formData.vehicleCompanyId;
         if (hasSC && hasVC) {
-          toast.error("Select only one: Service Center or Vehicle Company.");
+          toast.error("⚠️ Select only one: Service Center or Vehicle Company.");
           setLoading(false);
           return;
         }
         if (!hasSC && !hasVC) {
-          toast.error("Please select Service Center or Vehicle Company.");
+          toast.error("⚠️ Please select Service Center or Vehicle Company.");
           setLoading(false);
           return;
         }
@@ -186,7 +186,10 @@ export function CreateUserAccount() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      toast.success("✅ Account created successfully!");
+      // ✅ Thành công
+      toast.success("✅ Account created successfully!", { duration: 4000 });
+
+      // Reset form
       setFormData({
         username: "",
         password: "",
@@ -200,13 +203,34 @@ export function CreateUserAccount() {
         vehicleCompanyId: "",
       });
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Unable to create account.");
+      console.error("❌ API Error:", err?.response?.data);
+
+      const status = err?.response?.status;
+      const errorMsg = err?.response?.data?.message?.toLowerCase?.() || "";
+      const details = err?.response?.data?.errors;
+
+      // ✅ Hiển thị chi tiết lỗi từ backend
+      if (Array.isArray(details) && details.length > 0) {
+        toast.error(`⚠️ ${details.join(", ")}`);
+      } else if (errorMsg.includes("username")) {
+        toast.error("❌ Username already exists. Please choose another username.");
+      } else if (errorMsg.includes("employeecode")) {
+        toast.error("❌ Employee Code already exists. Please use another code.");
+      } else if (errorMsg.includes("validation")) {
+        toast.error("⚠️ Validation error: Please check all required fields.");
+      } else if (status === 409) {
+        toast.error(`⚠️ Conflict: ${err.response.data?.message || "Duplicate data."}`);
+      } else if (status === 500) {
+        toast.error(`❌ Server error: ${err.response?.data?.message || "Something went wrong on the server."}`);
+      } else {
+        toast.error("❌ Unable to create account. Please check your input.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ==== UI ====
+  // ===== UI Render =====
   if (!currentUser)
     return (
       <div className="p-6 text-center text-gray-600">
@@ -221,132 +245,133 @@ export function CreateUserAccount() {
       </div>
     );
 
-return (
-<div className="flex flex-col w-full min-h-screen bg-gray-50">
-  {/* Header Title Section */}
-  <div className="px-10 pt-6 pb-2">
-    <h1 className="text-2xl font-semibold text-gray-900">
-      Create User Account
-    </h1>
-    <p className="text-gray-500">
-      Manage employee accounts and assign roles for service centers or
-      companies.
-    </p>
-  </div>
+  return (
+    <div className="flex flex-col w-full min-h-screen bg-gray-50">
+      {/* Header Title Section */}
+      <div className="px-10 pt-6 pb-2">
+        <h1 className="text-2xl font-semibold text-gray-900">
+          Create User Account
+        </h1>
+        <p className="text-gray-500">
+          Manage employee accounts and assign roles for service centers or
+          companies.
+        </p>
+      </div>
 
-  {/* Main Content */}
-  <div className="flex justify-center w-full px-10 pt-8 pb-40">
-    <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 w-full max-w-6xl">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* User Information */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900">
-            👤 User Information
-          </h3>
+      {/* Main Content */}
+      <div className="flex justify-center w-full px-10 pt-8 pb-40">
+        <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 w-full max-w-6xl">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* User Information */}
+            <section>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                👤 User Information
+              </h3>
 
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Username", name: "username", required: true, type: "text" },
-              { label: "Password", name: "password", required: true, type: "password" },
-              { label: "Email", name: "email", type: "email" },
-              { label: "Phone", name: "phone", type: "text" },
-              { label: "Full Name", name: "name", type: "text" },
-              { label: "Address", name: "address", type: "text" },
-            ].map((field) => (
-              <div key={field.name} className="max-w-[90%]"> 
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  {field.label}
-                  {field.required && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  name={field.name}
-                  type={field.type}
-                  value={formData[field.name]}
-                  onChange={handleChange}
-                  required={field.required}
-                  className="border border-gray-300 p-1.5 sm:p-2 rounded-lg w-full bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Username", name: "username", required: true, type: "text" },
+                  { label: "Password", name: "password", required: true, type: "password" },
+                  { label: "Email", name: "email", type: "email" },
+                  { label: "Phone", name: "phone", type: "text" },
+                  { label: "Full Name", name: "name", type: "text" },
+                  { label: "Address", name: "address", type: "text" },
+                ].map((field) => (
+                  <div key={field.name} className="max-w-[90%]">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      {field.label}
+                      {field.required && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      name={field.name}
+                      type={field.type}
+                      value={formData[field.name]}
+                      onChange={handleChange}
+                      required={field.required}
+                      className="border border-gray-300 p-1.5 sm:p-2 rounded-lg w-full bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    />
+                  </div>
+                ))}
+
+                <div className="col-span-2 max-w-[95%]">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Employee Code<span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    name="employeeCode"
+                    type="text"
+                    value={formData.employeeCode}
+                    onChange={handleChange}
+                    required
+                    className="border border-gray-300 p-1.5 sm:p-2 rounded-lg w-full bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  />
+                </div>
               </div>
-            ))}
+            </section>
 
-            <div className="col-span-2 max-w-[95%]">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Employee Code<span className="text-red-500">*</span>
-              </label>
-              <input
-                name="employeeCode"
-                type="text"
-                value={formData.employeeCode}
-                onChange={handleChange}
-                required
-                className="border border-gray-300 p-1.5 sm:p-2 rounded-lg w-full bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-              />
-            </div>
-          </div>
-        </section>
+            {/* Role Section */}
+            <section>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                🏢 Role & Assignment
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Role Dropdown with Animated Arrow */}
+                <div className="relative">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Role
+                  </label>
+                  <div className="relative">
+                    <select
+                      name="roleId"
+                      value={formData.roleId}
+                      onChange={handleChange}
+                      required
+                      onFocus={() => setDropdownOpen(true)}
+                      onBlur={() => setDropdownOpen(false)}
+                      className="border border-gray-300 p-1.5 sm:p-2 rounded-lg w-full bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none text-sm appearance-none"
+                    >
+                      <option value="">Select role</option>
+                      {roles.map((r) => (
+                        <option key={r.roleId} value={r.roleId}>
+                          {r.roleName}
+                        </option>
+                      ))}
+                    </select>
 
-        {/* Role Section */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900">
-            🏢 Role & Assignment
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            {/* Role Dropdown with Animated Arrow */}
-            <div className="relative">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Role
-              </label>
-              <div className="relative">
-                <select
-                  name="roleId"
-                  value={formData.roleId}
-                  onChange={handleChange}
-                  required
-                  onFocus={() => setDropdownOpen(true)}
-                  onBlur={() => setDropdownOpen(false)}
-                  className="border border-gray-300 p-1.5 sm:p-2 rounded-lg w-full bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none text-sm appearance-none"
-                >
-                  <option value="">Select role</option>
-                  {roles.map((r) => (
-                    <option key={r.roleId} value={r.roleId}>
-                      {r.roleName}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Animated arrow */}
-                <svg
-                  className={`absolute right-3 top-1/2 transform -translate-y-1/2 transition-transform duration-300 text-gray-500 w-4 h-4 ${
-                    dropdownOpen ? "rotate-180" : "rotate-0"
-                  }`}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
+                    {/* Animated arrow */}
+                    <svg
+                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 transition-transform duration-300 text-gray-500 w-4 h-4 ${
+                        dropdownOpen ? "rotate-180" : "rotate-0"
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
 
-        {/* Submit Button */}
-        <div className="flex justify-end pt-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition disabled:opacity-60"
-          >
-            {loading ? "Creating..." : "Create Account"}
-          </button>
+            {/* Submit Button */}
+            <div className="flex justify-end pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition disabled:opacity-60"
+              >
+                {loading ? "Creating..." : "Create Account"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
-  </div>
-</div>
-
-);
-
-
+  );
 }
