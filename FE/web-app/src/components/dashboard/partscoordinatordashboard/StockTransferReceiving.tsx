@@ -38,10 +38,11 @@ export function StockTransferReceiving() {
       const response = await stockTransferService.getRequests({
         status: "SHIPPED",
       });
-      setIncomingShipments(response.data.requests);
+      setIncomingShipments(response.data?.requests || []);
     } catch (error) {
       console.error("Error loading incoming shipments:", error);
       toast.error("Failed to load incoming shipments");
+      setIncomingShipments([]);
     } finally {
       setLoading(false);
     }
@@ -79,9 +80,7 @@ export function StockTransferReceiving() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">
-          Incoming Shipments
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900">Incoming Shipments</h2>
         <p className="text-sm text-gray-500 mt-1">
           Receive and process incoming stock transfers
         </p>
@@ -114,7 +113,7 @@ export function StockTransferReceiving() {
             <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
             <span className="ml-2 text-gray-600">Loading shipments...</span>
           </div>
-        ) : incomingShipments.length === 0 ? (
+        ) : !incomingShipments || incomingShipments.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500">No incoming shipments</p>
@@ -150,9 +149,12 @@ export function StockTransferReceiving() {
                       <div className="flex items-start gap-2">
                         <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
                         <div>
-                          <p className="text-xs text-gray-500">Requesting Warehouse</p>
+                          <p className="text-xs text-gray-500">
+                            Requesting Warehouse
+                          </p>
                           <p className="text-sm font-medium text-gray-900">
-                            {request.requestingWarehouse?.warehouseName || "Unknown"}
+                            {request.requestingWarehouse?.warehouseName ||
+                              "Unknown"}
                           </p>
                         </div>
                       </div>
@@ -170,12 +172,18 @@ export function StockTransferReceiving() {
                     <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span>Shipped: {formatDate(request.shippedAt || request.createdAt)}</span>
+                        <span>
+                          Shipped:{" "}
+                          {formatDate(request.shippedAt || request.createdAt)}
+                        </span>
                       </div>
                       {request.estimatedDeliveryDate && (
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3.5 h-3.5" />
-                          <span>Est. Delivery: {formatDate(request.estimatedDeliveryDate)}</span>
+                          <span>
+                            Est. Delivery:{" "}
+                            {formatDate(request.estimatedDeliveryDate)}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -185,9 +193,13 @@ export function StockTransferReceiving() {
                         <p className="text-xs text-gray-500 mb-2">Components</p>
                         <div className="space-y-2">
                           {request.items.map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between">
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between"
+                            >
                               <p className="text-sm font-medium text-gray-900">
-                                {item.typeComponent?.name || "Unknown Component"}
+                                {item.typeComponent?.name ||
+                                  "Unknown Component"}
                               </p>
                               <p className="text-xs text-gray-600">
                                 Qty: {item.quantityRequested}
@@ -279,7 +291,10 @@ export function StockTransferReceiving() {
                     <p className="text-xs text-gray-500 mb-2">Components</p>
                     <div className="space-y-2">
                       {selectedRequest.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-white p-2 rounded">
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between bg-white p-2 rounded"
+                        >
                           <p className="text-sm font-medium text-gray-900">
                             {item.typeComponent?.name || "Unknown"}
                           </p>
@@ -292,7 +307,9 @@ export function StockTransferReceiving() {
                   </div>
                 )}
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Requesting Warehouse</p>
+                  <p className="text-xs text-gray-500 mb-1">
+                    Requesting Warehouse
+                  </p>
                   <p className="text-sm font-medium text-gray-900">
                     {selectedRequest.requestingWarehouse?.warehouseName}
                   </p>
