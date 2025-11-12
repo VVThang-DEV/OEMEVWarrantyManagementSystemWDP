@@ -11,6 +11,11 @@ let chatSocket: Socket | null = null;
  * Initialize chat socket connection
  */
 export function initializeChatSocket(token?: string): Socket {
+  // Only initialize on client side
+  if (typeof window === "undefined") {
+    throw new Error("Socket can only be initialized on the client side");
+  }
+
   if (chatSocket && chatSocket.connected) {
     return chatSocket;
   }
@@ -161,6 +166,11 @@ let notificationSocket: Socket | null = null;
  * Initialize notification socket with authentication token
  */
 export function initializeNotificationSocket(token: string): Socket {
+  // Only initialize on client side
+  if (typeof window === "undefined") {
+    throw new Error("Socket can only be initialized on the client side");
+  }
+
   if (notificationSocket && notificationSocket.connected) {
     return notificationSocket;
   }
