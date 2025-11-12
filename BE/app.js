@@ -32,6 +32,7 @@ import taskAssignmentRouter from "./src/api/routes/taskAssignmentRouter.js";
 import vehicleModelRouter from "./src/api/routes/vehicleModel.router.js";
 import recallRouter from "./src/api/routes/recall.router.js";
 import roleRouter from "./src/api/routes/role.router.js";
+import publicRouter from "./src/api/routes/public.router.js";
 
 app.get("/", async (req, res) => {
   res.send("Hello world");
@@ -39,6 +40,7 @@ app.get("/", async (req, res) => {
 
 const url = "/api/v1";
 
+app.use("/api/public", publicRouter);
 app.use(`${url}/auth`, authRouter);
 app.use(`${url}/vehicles`, vehicleRouter);
 app.use(`${url}/customers`, customerRouter);

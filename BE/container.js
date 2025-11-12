@@ -59,6 +59,7 @@ import RecallService from "./src/service/recall.service.js";
 import RoleService from "./src/service/role.service.js";
 import ServiceCenterService from "./src/service/serviceCenter.service.js";
 import WarrantyComponentService from "./src/service/warrantyComponent.service.js";
+import PublicService from "./src/service/public.service.js";
 
 // Import controllers
 import AuthController from "./src/api/controller/auth.controller.js";
@@ -79,6 +80,7 @@ import TaskAssignmentController from "./src/api/controller/taskAssignment.contro
 import OemVehicleModelController from "./src/api/controller/oemVehicleModel.controller.js";
 import RecallController from "./src/api/controller/recall.controller.js";
 import RoleController from "./src/api/controller/role.controller.js";
+import PublicController from "./src/api/controller/public.controller.js";
 
 const container = createContainer();
 
@@ -232,6 +234,7 @@ export const setupContainer = (socket) => {
     warrantyComponentService: asClass(WarrantyComponentService, {
       lifetime: Lifetime.SCOPED,
     }),
+    publicService: asClass(PublicService, { lifetime: Lifetime.SCOPED }),
 
     // Controllers
     authController: asClass(AuthController, {
@@ -289,6 +292,9 @@ export const setupContainer = (socket) => {
       lifetime: Lifetime.SCOPED,
     }),
     roleController: asClass(RoleController, {
+      lifetime: Lifetime.SCOPED,
+    }),
+    publicController: asClass(PublicController, {
       lifetime: Lifetime.SCOPED,
     }),
   });
