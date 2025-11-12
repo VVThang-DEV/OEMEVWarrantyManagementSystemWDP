@@ -1,4 +1,5 @@
-import type { Socket } from "socket.io-client";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Socket = any; // Using any to avoid importing from socket.io-client
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
