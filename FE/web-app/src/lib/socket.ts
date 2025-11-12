@@ -1,7 +1,24 @@
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
+
+// Dynamic import of socket.io-client to avoid SSR issues
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let io: any = null;
+
+async function getSocketIO() {
+  if (typeof window === "undefined") {
+    throw new Error("Socket.IO can only be used on the client side");
+  }
+
+  if (!io) {
+    const socketIO = await import("socket.io-client");
+    io = socketIO.io;
+  }
+
+  return io;
+}
 
 // ==================== Chat Socket ====================
 
@@ -10,7 +27,7 @@ let chatSocket: Socket | null = null;
 /**
  * Initialize chat socket connection
  */
-export function initializeChatSocket(token?: string): Socket {
+export async function initializeChatSocket(token?: string): Promise<Socket> {
   // Only initialize on client side
   if (typeof window === "undefined") {
     throw new Error("Socket can only be initialized on the client side");
@@ -20,9 +37,10 @@ export function initializeChatSocket(token?: string): Socket {
     return chatSocket;
   }
 
+  const socketIO = await getSocketIO();
   const auth = token ? { token } : {};
 
-  chatSocket = io(`${SOCKET_URL}/chats`, {
+  chatSocket = socketIO(`${SOCKET_URL}/chats`, {
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionAttempts: 5,
@@ -58,7 +76,7 @@ export function initializeChatSocket(token?: string): Socket {
     console.error("Chat socket reconnection error:", error);
   });
 
-  return chatSocket;
+  return chatSocket as Socket;
 }
 
 /**
@@ -165,7 +183,9 @@ let notificationSocket: Socket | null = null;
 /**
  * Initialize notification socket with authentication token
  */
-export function initializeNotificationSocket(token: string): Socket {
+export async function initializeNotificationSocket(
+  token: string
+): Promise<Socket> {
   // Only initialize on client side
   if (typeof window === "undefined") {
     throw new Error("Socket can only be initialized on the client side");
@@ -175,7 +195,9 @@ export function initializeNotificationSocket(token: string): Socket {
     return notificationSocket;
   }
 
-  notificationSocket = io(`${SOCKET_URL}/notifications`, {
+  const socketIO = await getSocketIO();
+
+  notificationSocket = socketIO(`${SOCKET_URL}/notifications`, {
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionAttempts: 5,
@@ -197,7 +219,7 @@ export function initializeNotificationSocket(token: string): Socket {
     console.error("Notification socket connection error:", error);
   });
 
-  return notificationSocket;
+  return notificationSocket as Socket;
 }
 
 /**

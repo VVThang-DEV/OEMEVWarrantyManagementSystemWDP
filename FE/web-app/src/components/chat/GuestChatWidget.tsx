@@ -94,9 +94,9 @@ export default function GuestChatWidget({
     scrollToBottom();
   }, [messages]);
 
-  const initializeSocket = () => {
+  const initializeSocket = async () => {
     try {
-      initializeChatSocket();
+      await initializeChatSocket();
       setIsConnected(true);
     } catch (err) {
       console.error("Failed to initialize socket:", err);

@@ -126,316 +126,331 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
 
     console.log("🔔 Initializing notification socket...");
-    const socket = initializeNotificationSocket(token);
 
-    socket.on("connect", () => {
-      console.log("✅ Notification socket connected");
-      setIsConnected(true);
-    });
+    // Use async function to handle promise
+    const initSocket = async () => {
+      try {
+        const socket = await initializeNotificationSocket(token);
 
-    socket.on("disconnect", () => {
-      console.log("❌ Notification socket disconnected");
-      setIsConnected(false);
-    });
-
-    // Listen for notification events from backend
-    socket.on("notification", (data: NotificationSocketData) => {
-      console.log("🔔 New notification received:", data);
-      addNotification(data);
-    });
-
-    // Listen for case assignment notifications
-    socket.on("caseAssigned", (data: NotificationSocketData) => {
-      console.log("📋 Case assigned notification:", data);
-      addNotification({
-        ...data,
-        type: "case_assigned",
-        priority: "high",
-      });
-    });
-
-    // Listen for stock transfer notifications
-    socket.on("stockTransferRequest", (data: NotificationSocketData) => {
-      console.log("📦 Stock transfer request:", data);
-      addNotification({
-        ...data,
-        type: "stock_transfer_request",
-        priority: "medium",
-      });
-    });
-
-    // Listen for case update notifications
-    socket.on("caseUpdated", (data: NotificationSocketData) => {
-      console.log("🔄 Case updated notification:", data);
-      addNotification({
-        ...data,
-        type: "case_updated",
-        priority: "medium",
-      });
-    });
-
-    // Listen for appointment notifications
-    socket.on("appointmentScheduled", (data: NotificationSocketData) => {
-      console.log("📅 Appointment scheduled:", data);
-      addNotification({
-        ...data,
-        type: "appointment_scheduled",
-        priority: "high",
-      });
-    });
-
-    // ========== BACKEND SOCKET EVENTS ==========
-    //
-    // Navigation System:
-    // - Instead of hardcoded URLs, we pass `navigationAction` in data
-    // - Dashboard components receive `onNavigate` callback prop
-    // - When notification is clicked, it calls onNavigate(navigationAction)
-    // - This changes the active nav state in the dashboard (e.g., "transfers", "tasks")
-    //
-    // Navigation Action Mapping by Role:
-    // - Manager: "transfers", "tasks", "cases", "schedules", "warehouse"
-    // - Staff: "stock-transfers", "cases", "chat-support"
-    // - Technician: "tasks", "schedule"
-    // - EMV Staff: "transfer-requests", "dashboard"
-    //
-    // Data Structure:
-    // - All notifications include relevant IDs (requestId, taskId, caseId, etc.)
-    // - Backend sends: { requestId, sentAt, ... }
-    // - Frontend adds: { navigationAction, ...ids }
-    // ==========================================================
-
-    // New repair task assigned to technician
-    socket.on("newRepairTaskAssigned", (data: Record<string, unknown>) => {
-      console.log("🔧 New repair task assigned:", data);
-      const taskId = data.taskId || data.id;
-      addNotification({
-        type: "case_assigned",
-        priority: "high",
-        title: "New Repair Task Assigned",
-        message: `You have been assigned a new repair task`,
-        timestamp: (data.sentAt as string) || new Date().toISOString(),
-        data: {
-          ...data,
-          navigationAction: "tasks",
-          taskId: taskId,
-        },
-      });
-    });
-
-    // Vehicle processing record status updated
-    socket.on(
-      "vehicleProcessingRecordStatusUpdated",
-      (data: Record<string, unknown>) => {
-        console.log("📋 Vehicle processing record updated:", data);
-        const recordId = data.vehicleProcessingRecordId || data.id;
-        addNotification({
-          type: "case_updated",
-          priority: "medium",
-          title: "Case Status Updated",
-          message: `Vehicle processing record has been updated`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
-            ...data,
-            navigationAction: "cases",
-            navigationId: String(recordId),
-          },
+        socket.on("connect", () => {
+          console.log("✅ Notification socket connected");
+          setIsConnected(true);
         });
-      }
-    );
 
-    // Stock transfer request approved
-    socket.on(
-      "stock_transfer_request_approved",
-      (data: Record<string, unknown>) => {
-        console.log("✅ Stock transfer approved:", data);
-        const requestId = data.requestId || data.id;
-        addNotification({
-          type: "stock_transfer_approved",
-          priority: "high",
-          title: "Stock Transfer Approved",
-          message: `Stock transfer request #${String(requestId).slice(
-            0,
-            8
-          )} has been approved`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
-            ...data,
-            navigationAction: "stock-transfers",
-            navigationId: String(requestId),
-            navigationType: "detail",
-            requestId: requestId,
-          },
+        socket.on("disconnect", () => {
+          console.log("❌ Notification socket disconnected");
+          setIsConnected(false);
         });
-      }
-    );
 
-    // Stock transfer request shipped
-    socket.on(
-      "stock_transfer_request_shipped",
-      (data: Record<string, unknown>) => {
-        console.log("📦 Stock transfer shipped:", data);
-        const requestId = data.requestId || data.id;
-        addNotification({
-          type: "stock_transfer_request",
-          priority: "medium",
-          title: "Stock Transfer Shipped",
-          message: `Stock transfer request #${String(requestId).slice(
-            0,
-            8
-          )} has been shipped`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
-            ...data,
-            navigationAction: "stock-transfers",
-            navigationId: String(requestId),
-            navigationType: "detail",
-            requestId: requestId,
-          },
+        // Listen for notification events from backend
+        socket.on("notification", (data: NotificationSocketData) => {
+          console.log("🔔 New notification received:", data);
+          addNotification(data);
         });
-      }
-    );
 
-    // Stock transfer request received
-    socket.on(
-      "stock_transfer_request_received",
-      (data: Record<string, unknown>) => {
-        console.log("✅ Stock transfer received:", data);
-        const requestId = data.requestId || data.id;
-        addNotification({
-          type: "stock_transfer_approved",
-          priority: "medium",
-          title: "Stock Transfer Received",
-          message: `Stock transfer request #${String(requestId).slice(
-            0,
-            8
-          )} has been received`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
+        // Listen for case assignment notifications
+        socket.on("caseAssigned", (data: NotificationSocketData) => {
+          console.log("📋 Case assigned notification:", data);
+          addNotification({
             ...data,
-            navigationAction: "stock-transfers",
-            navigationId: String(requestId),
-            navigationType: "detail",
-            requestId: requestId,
-          },
+            type: "case_assigned",
+            priority: "high",
+          });
         });
-      }
-    );
 
-    // Stock transfer request rejected
-    socket.on(
-      "stock_transfer_request_rejected",
-      (data: Record<string, unknown>) => {
-        console.log("❌ Stock transfer rejected:", data);
-        const requestId = data.requestId || data.id;
-        const reason = data.rejectionReason || "No reason provided";
-        addNotification({
-          type: "stock_transfer_rejected",
-          priority: "high",
-          title: "Stock Transfer Rejected",
-          message: `Stock transfer request #${String(requestId).slice(
-            0,
-            8
-          )} was rejected: ${reason}`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
+        // Listen for stock transfer notifications
+        socket.on("stockTransferRequest", (data: NotificationSocketData) => {
+          console.log("📦 Stock transfer request:", data);
+          addNotification({
             ...data,
-            navigationAction: "stock-transfers",
-            navigationId: String(requestId),
-            navigationType: "detail",
-            requestId: requestId,
-          },
+            type: "stock_transfer_request",
+            priority: "medium",
+          });
         });
-      }
-    );
 
-    // Stock transfer request cancelled
-    socket.on(
-      "stock_transfer_request_cancelled",
-      (data: Record<string, unknown>) => {
-        console.log("🚫 Stock transfer cancelled:", data);
-        const requestId = data.requestId || data.id;
-        addNotification({
-          type: "system_alert",
-          priority: "medium",
-          title: "Stock Transfer Cancelled",
-          message: `Stock transfer request #${String(requestId).slice(
-            0,
-            8
-          )} has been cancelled`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
+        // Listen for case update notifications
+        socket.on("caseUpdated", (data: NotificationSocketData) => {
+          console.log("🔄 Case updated notification:", data);
+          addNotification({
             ...data,
-            navigationAction: "stock-transfers",
-            navigationId: String(requestId),
-            navigationType: "detail",
-            requestId: requestId,
-          },
+            type: "case_updated",
+            priority: "medium",
+          });
         });
-      }
-    );
 
-    // New conversation created (chat)
-    socket.on("newConversation", (data: Record<string, unknown>) => {
-      console.log("💬 New conversation:", data);
-      const conversationId = data.conversationId || data.id;
-      addNotification({
-        type: "new_message",
-        priority: "medium",
-        title: "New Conversation",
-        message: `You have a new conversation`,
-        timestamp: (data.sentAt as string) || new Date().toISOString(),
-        data: {
-          ...data,
-          navigationAction: "chat-support",
-          navigationId: String(conversationId),
-        },
-      });
-    });
-
-    // Inventory adjustment created
-    socket.on(
-      "inventory_adjustment_created",
-      (data: Record<string, unknown>) => {
-        console.log("📦 Inventory adjustment created:", data);
-        const adjustmentType = data.adjustmentType as string;
-        const quantity = data.quantity as number;
-        const reason = data.reason as string;
-
-        addNotification({
-          type: "system_alert",
-          priority: "medium",
-          title: `Inventory ${adjustmentType === "IN" ? "Added" : "Removed"}`,
-          message: `${quantity} item(s) ${
-            adjustmentType === "IN" ? "added to" : "removed from"
-          } inventory. Reason: ${reason}`,
-          timestamp: (data.sentAt as string) || new Date().toISOString(),
-          data: {
+        // Listen for appointment notifications
+        socket.on("appointmentScheduled", (data: NotificationSocketData) => {
+          console.log("📅 Appointment scheduled:", data);
+          addNotification({
             ...data,
-            navigationAction: "inventory",
-          },
+            type: "appointment_scheduled",
+            priority: "high",
+          });
         });
+
+        // ========== BACKEND SOCKET EVENTS ==========
+        //
+        // Navigation System:
+        // - Instead of hardcoded URLs, we pass `navigationAction` in data
+        // - Dashboard components receive `onNavigate` callback prop
+        // - When notification is clicked, it calls onNavigate(navigationAction)
+        // - This changes the active nav state in the dashboard (e.g., "transfers", "tasks")
+        //
+        // Navigation Action Mapping by Role:
+        // - Manager: "transfers", "tasks", "cases", "schedules", "warehouse"
+        // - Staff: "stock-transfers", "cases", "chat-support"
+        // - Technician: "tasks", "schedule"
+        // - EMV Staff: "transfer-requests", "dashboard"
+        //
+        // Data Structure:
+        // - All notifications include relevant IDs (requestId, taskId, caseId, etc.)
+        // - Backend sends: { requestId, sentAt, ... }
+        // - Frontend adds: { navigationAction, ...ids }
+        // ==========================================================
+
+        // New repair task assigned to technician
+        socket.on("newRepairTaskAssigned", (data: Record<string, unknown>) => {
+          console.log("🔧 New repair task assigned:", data);
+          const taskId = data.taskId || data.id;
+          addNotification({
+            type: "case_assigned",
+            priority: "high",
+            title: "New Repair Task Assigned",
+            message: `You have been assigned a new repair task`,
+            timestamp: (data.sentAt as string) || new Date().toISOString(),
+            data: {
+              ...data,
+              navigationAction: "tasks",
+              taskId: taskId,
+            },
+          });
+        });
+
+        // Vehicle processing record status updated
+        socket.on(
+          "vehicleProcessingRecordStatusUpdated",
+          (data: Record<string, unknown>) => {
+            console.log("📋 Vehicle processing record updated:", data);
+            const recordId = data.vehicleProcessingRecordId || data.id;
+            addNotification({
+              type: "case_updated",
+              priority: "medium",
+              title: "Case Status Updated",
+              message: `Vehicle processing record has been updated`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "cases",
+                navigationId: String(recordId),
+              },
+            });
+          }
+        );
+
+        // Stock transfer request approved
+        socket.on(
+          "stock_transfer_request_approved",
+          (data: Record<string, unknown>) => {
+            console.log("✅ Stock transfer approved:", data);
+            const requestId = data.requestId || data.id;
+            addNotification({
+              type: "stock_transfer_approved",
+              priority: "high",
+              title: "Stock Transfer Approved",
+              message: `Stock transfer request #${String(requestId).slice(
+                0,
+                8
+              )} has been approved`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "stock-transfers",
+                navigationId: String(requestId),
+                navigationType: "detail",
+                requestId: requestId,
+              },
+            });
+          }
+        );
+
+        // Stock transfer request shipped
+        socket.on(
+          "stock_transfer_request_shipped",
+          (data: Record<string, unknown>) => {
+            console.log("📦 Stock transfer shipped:", data);
+            const requestId = data.requestId || data.id;
+            addNotification({
+              type: "stock_transfer_request",
+              priority: "medium",
+              title: "Stock Transfer Shipped",
+              message: `Stock transfer request #${String(requestId).slice(
+                0,
+                8
+              )} has been shipped`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "stock-transfers",
+                navigationId: String(requestId),
+                navigationType: "detail",
+                requestId: requestId,
+              },
+            });
+          }
+        );
+
+        // Stock transfer request received
+        socket.on(
+          "stock_transfer_request_received",
+          (data: Record<string, unknown>) => {
+            console.log("✅ Stock transfer received:", data);
+            const requestId = data.requestId || data.id;
+            addNotification({
+              type: "stock_transfer_approved",
+              priority: "medium",
+              title: "Stock Transfer Received",
+              message: `Stock transfer request #${String(requestId).slice(
+                0,
+                8
+              )} has been received`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "stock-transfers",
+                navigationId: String(requestId),
+                navigationType: "detail",
+                requestId: requestId,
+              },
+            });
+          }
+        );
+
+        // Stock transfer request rejected
+        socket.on(
+          "stock_transfer_request_rejected",
+          (data: Record<string, unknown>) => {
+            console.log("❌ Stock transfer rejected:", data);
+            const requestId = data.requestId || data.id;
+            const reason = data.rejectionReason || "No reason provided";
+            addNotification({
+              type: "stock_transfer_rejected",
+              priority: "high",
+              title: "Stock Transfer Rejected",
+              message: `Stock transfer request #${String(requestId).slice(
+                0,
+                8
+              )} was rejected: ${reason}`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "stock-transfers",
+                navigationId: String(requestId),
+                navigationType: "detail",
+                requestId: requestId,
+              },
+            });
+          }
+        );
+
+        // Stock transfer request cancelled
+        socket.on(
+          "stock_transfer_request_cancelled",
+          (data: Record<string, unknown>) => {
+            console.log("🚫 Stock transfer cancelled:", data);
+            const requestId = data.requestId || data.id;
+            addNotification({
+              type: "system_alert",
+              priority: "medium",
+              title: "Stock Transfer Cancelled",
+              message: `Stock transfer request #${String(requestId).slice(
+                0,
+                8
+              )} has been cancelled`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "stock-transfers",
+                navigationId: String(requestId),
+                navigationType: "detail",
+                requestId: requestId,
+              },
+            });
+          }
+        );
+
+        // New conversation created (chat)
+        socket.on("newConversation", (data: Record<string, unknown>) => {
+          console.log("💬 New conversation:", data);
+          const conversationId = data.conversationId || data.id;
+          addNotification({
+            type: "new_message",
+            priority: "medium",
+            title: "New Conversation",
+            message: `You have a new conversation`,
+            timestamp: (data.sentAt as string) || new Date().toISOString(),
+            data: {
+              ...data,
+              navigationAction: "chat-support",
+              navigationId: String(conversationId),
+            },
+          });
+        });
+
+        // Inventory adjustment created
+        socket.on(
+          "inventory_adjustment_created",
+          (data: Record<string, unknown>) => {
+            console.log("📦 Inventory adjustment created:", data);
+            const adjustmentType = data.adjustmentType as string;
+            const quantity = data.quantity as number;
+            const reason = data.reason as string;
+
+            addNotification({
+              type: "system_alert",
+              priority: "medium",
+              title: `Inventory ${
+                adjustmentType === "IN" ? "Added" : "Removed"
+              }`,
+              message: `${quantity} item(s) ${
+                adjustmentType === "IN" ? "added to" : "removed from"
+              } inventory. Reason: ${reason}`,
+              timestamp: (data.sentAt as string) || new Date().toISOString(),
+              data: {
+                ...data,
+                navigationAction: "inventory",
+              },
+            });
+          }
+        );
+
+        // Low stock alert
+        socket.on("low_stock_alert", (data: Record<string, unknown>) => {
+          console.log("⚠️ Low stock alert:", data);
+          const stocks = (data.stocks as Record<string, unknown>[]) || [];
+          const stockCount = stocks.length;
+
+          addNotification({
+            type: "system_alert",
+            priority: "high",
+            title: "Low Stock Alert",
+            message: `${stockCount} item(s) are running low on stock`,
+            timestamp: (data.sentAt as string) || new Date().toISOString(),
+            data: {
+              ...data,
+              navigationAction: "inventory",
+              stocks,
+            },
+          });
+        });
+
+        console.log("✅ All notification socket listeners attached");
+      } catch (error) {
+        console.error("❌ Failed to initialize notification socket:", error);
       }
-    );
+    };
 
-    // Low stock alert
-    socket.on("low_stock_alert", (data: Record<string, unknown>) => {
-      console.log("⚠️ Low stock alert:", data);
-      const stocks = (data.stocks as Record<string, unknown>[]) || [];
-      const stockCount = stocks.length;
-
-      addNotification({
-        type: "system_alert",
-        priority: "high",
-        title: "Low Stock Alert",
-        message: `${stockCount} item(s) are running low on stock`,
-        timestamp: (data.sentAt as string) || new Date().toISOString(),
-        data: {
-          ...data,
-          navigationAction: "inventory",
-          stocks,
-        },
-      });
-    });
+    // Initialize socket
+    initSocket();
 
     // Cleanup on unmount
     return () => {

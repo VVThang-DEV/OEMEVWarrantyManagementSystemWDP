@@ -173,13 +173,13 @@ export default function StaffChatDashboard({
     scrollToBottom();
   }, [messages]);
 
-  const initializeSockets = () => {
+  const initializeSockets = async () => {
     // Initialize chat socket with auth token for staff
-    initializeChatSocket(authToken || undefined);
+    await initializeChatSocket(authToken || undefined);
 
     // Initialize notification socket for new chat alerts
     if (authToken) {
-      const notifSocket = initializeNotificationSocket(authToken);
+      const notifSocket = await initializeNotificationSocket(authToken);
 
       // Clean up any existing listeners to prevent duplicates
       notifSocket.off("newConversation");
@@ -216,7 +216,7 @@ export default function StaffChatDashboard({
         "Connected:",
         socket?.connected
       );
-      initializeChatSocket(authToken || undefined);
+      initializeChatSocket(authToken || undefined).catch(console.error);
       // Retry after a short delay
       setTimeout(() => setupChatListeners(), 1000);
       return;
@@ -361,7 +361,7 @@ export default function StaffChatDashboard({
     const socket = getChatSocket();
     if (!socket || !socket.connected) {
       console.error("[Staff] Socket not connected! Reinitializing...");
-      initializeChatSocket(authToken || undefined);
+      initializeChatSocket(authToken || undefined).catch(console.error);
       alert("Connection lost. Please try again in a moment.");
       return;
     }
