@@ -1,8 +1,23 @@
 "use client";
 
 import nextDynamic from "next/dynamic";
-import { NotificationProvider } from "@/contexts/NotificationContext";
 import { Loader2 } from "lucide-react";
+
+// Dynamically import NotificationProvider to prevent SSR socket issues
+const NotificationProvider = nextDynamic(
+  () =>
+    import("@/contexts/NotificationContext").then(
+      (mod) => mod.NotificationProvider
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+      </div>
+    ),
+  }
+);
 
 // Wrap children in dynamic import to prevent SSR
 const DynamicContent = nextDynamic(
