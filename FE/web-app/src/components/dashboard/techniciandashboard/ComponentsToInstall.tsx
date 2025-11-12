@@ -36,7 +36,7 @@ export function ComponentsToInstall() {
       return componentsReady;
     },
     {
-      interval: 20000, // Poll every 20 seconds
+      interval: 30000, // Poll every 30 seconds
       enabled: !loading && !selectedComponent, // Only poll when not loading and no modal open
       onError: (err) => {
         console.error("❌ Components polling error:", err);

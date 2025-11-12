@@ -1,9 +1,20 @@
-import apiClient from "@/lib/apiClient";
+import axios from "axios";
 
 /**
  * Public Tracking Service
  * Handles public (unauthenticated) API calls for vehicle service tracking
  */
+
+// Create a separate axios instance for public API (without /v1 in the path)
+const publicApiClient = axios.create({
+  baseURL:
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "/api") ||
+    "http://localhost:3001/api",
+  timeout: 30000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
 export interface TrackingInfo {
   vehicleProcessingRecordId: string;
@@ -62,7 +73,7 @@ export interface TrackingResponse {
 
 /**
  * Get vehicle service tracking information by token
- * GET /api/public/tracking?token=<uuid>
+ * GET /public/tracking?token=<uuid>
  *
  * This is a public endpoint that doesn't require authentication.
  * Users receive the tracking token via email when their vehicle is checked in.
@@ -74,7 +85,7 @@ export const getTrackingInfo = async (
   token: string
 ): Promise<TrackingResponse> => {
   try {
-    const response = await apiClient.get("/api/public/tracking", {
+    const response = await publicApiClient.get("/public/tracking", {
       params: { token },
     });
 

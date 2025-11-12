@@ -133,9 +133,13 @@ export function CasesList({ onViewDetails }: CasesListProps) {
     }
   );
 
+  // Initial fetch on mount or filter change
   useEffect(() => {
-    fetchRecords();
-  }, [currentPage, statusFilter]);
+    if (statusFilter !== "ALL") {
+      fetchRecords();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   const fetchRecords = async () => {
     setLoading(true);

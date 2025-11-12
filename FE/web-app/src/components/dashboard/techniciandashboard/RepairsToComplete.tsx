@@ -23,7 +23,7 @@ export function RepairsToComplete() {
       return inRepairLines;
     },
     {
-      interval: 20000, // Poll every 20 seconds
+      interval: 30000, // Poll every 30 seconds
       enabled: !loading, // Only poll when not loading
       onError: (err) => {
         console.error("❌ Repairs polling error:", err);

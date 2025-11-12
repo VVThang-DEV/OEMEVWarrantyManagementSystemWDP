@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -24,8 +24,27 @@ export function TrackingWidget() {
   const [trackingInfo, setTrackingInfo] = useState<TrackingInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleTrack = async () => {
-    if (!token.trim()) {
+  // Auto-fill token from URL and auto-track
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get("token");
+
+      // If on /track path, redirect to homepage with token
+      if (window.location.pathname === "/track" && tokenFromUrl) {
+        window.history.replaceState(null, "", `/?token=${tokenFromUrl}`);
+      }
+
+      if (tokenFromUrl) {
+        setToken(tokenFromUrl);
+        // Auto-track immediately
+        handleTrackWithToken(tokenFromUrl);
+      }
+    }
+  }, []);
+
+  const handleTrackWithToken = async (trackingToken: string) => {
+    if (!trackingToken.trim()) {
       setError("Please enter a tracking token");
       return;
     }
@@ -35,7 +54,9 @@ export function TrackingWidget() {
       setError(null);
       setTrackingInfo(null);
 
-      const response = await publicService.getTrackingInfo(token.trim());
+      const response = await publicService.getTrackingInfo(
+        trackingToken.trim()
+      );
       setTrackingInfo(response.data);
     } catch (err: unknown) {
       console.error("Error fetching tracking info:", err);
@@ -57,6 +78,10 @@ export function TrackingWidget() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTrack = async () => {
+    await handleTrackWithToken(token);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -116,7 +141,7 @@ export function TrackingWidget() {
           <div className="inline-flex items-center gap-3 mb-6 px-4 py-2 rounded-full bg-white/5 border border-white/10">
             <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             <span className="text-sm text-blue-300 font-medium tracking-wider">
-             SERVICE TRACKING
+              SERVICE TRACKING
             </span>
           </div>
 

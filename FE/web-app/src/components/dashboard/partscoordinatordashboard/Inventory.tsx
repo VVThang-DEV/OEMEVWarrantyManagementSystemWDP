@@ -44,7 +44,7 @@ export default function Inventory() {
       return data;
     },
     {
-      interval: 20000, // Poll every 20 seconds
+      interval: 30000, // Poll every 30 seconds
       enabled: !loading && !isAllocModalOpen && !isTransferModalOpen,
       onError: (err) => {
         console.error("❌ Inventory polling error:", err);
