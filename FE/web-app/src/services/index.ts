@@ -65,22 +65,7 @@ export type {
 
 export { default as technicianService } from "./technicianService";
 
-// Chat service exports (no default export in chatService)
-export {
-  startAnonymousChat,
-  getConversationMessages,
-  acceptConversation,
-  getMyConversations,
-  closeConversation,
-  getOrCreateGuestId,
-  getGuestChatSession,
-  saveGuestConversationId,
-  clearGuestChatSession,
-} from "./chatService";
-export type {
-  GuestChatSession,
-  Message,
-  Conversation,
-  StartChatRequest,
-  StartChatResponse,
-} from "./chatService";
+// NOTE: Chat service NOT exported here to prevent webpack bundling issues
+// Import directly from "@/services/chatService" when needed
+// This prevents socket.io code from being bundled into shared chunks
+
