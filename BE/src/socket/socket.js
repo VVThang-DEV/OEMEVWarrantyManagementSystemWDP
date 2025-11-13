@@ -9,6 +9,7 @@ export function initializeSocket(httpServer) {
     cors: {
       origin: "*",
     },
+    path: "/socket.io",
   });
 
   const notificationNamespace = io.of("/notifications");

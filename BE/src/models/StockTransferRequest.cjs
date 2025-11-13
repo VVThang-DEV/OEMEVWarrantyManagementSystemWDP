@@ -55,6 +55,13 @@ module.exports = (sequelize, DataTypes) => {
       field: "rejection_reason",
     },
 
+    requestType: {
+      type: DataTypes.ENUM("CASELINE", "WAREHOUSE_RESTOCK"),
+      allowNull: false,
+      defaultValue: "CASELINE",
+      field: "request_type",
+    },
+
     cancellationReason: {
       type: DataTypes.TEXT,
       allowNull: true,
