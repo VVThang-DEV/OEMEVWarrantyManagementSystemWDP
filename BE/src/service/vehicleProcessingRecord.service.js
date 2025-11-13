@@ -260,7 +260,7 @@ class VehicleProcessingRecordService {
           html
         )
         .catch((err) => {
-          console.error("Failed to send tracking email:", err);
+          throw new Error("Failed to send tracking email:", err);
         });
     }
 
