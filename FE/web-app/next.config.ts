@@ -2,10 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: false,
-  // Disable build cache to force fresh build
-  generateBuildId: async () => {
-    return `build-${Date.now()}`;
-  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -23,7 +19,25 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
-    // Fix for crypto and other Node.js modules in client-side
+    // PERMANENT FIX: Prevent socket.io bundling issues
+    // Exclude socket.io-client from BOTH server and client bundles
+    config.externals = config.externals || [];
+
+    if (
+      typeof config.externals === "object" &&
+      !Array.isArray(config.externals)
+    ) {
+      config.externals = [config.externals];
+    }
+
+    if (Array.isArray(config.externals)) {
+      config.externals.push({
+        "socket.io-client": "io",
+        "engine.io-client": "io",
+      });
+    }
+
+    // Fallbacks for Node.js modules on client side
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -39,22 +53,19 @@ const nextConfig: NextConfig = {
         http2: false,
         path: false,
         zlib: false,
+        os: false,
+        http: false,
+        https: false,
+        url: false,
+        assert: false,
       };
     }
 
-    // Completely exclude socket.io from server bundle
-    if (isServer) {
-      config.externals = [
-        ...(config.externals || []),
-        "socket.io-client",
-        "engine.io-client",
-      ];
-    }
-
-    // Ignore node modules warnings
+    // Suppress warnings
     config.ignoreWarnings = [
       { module: /node_modules\/socket\.io-client/ },
       { module: /node_modules\/engine\.io-client/ },
+      /Critical dependency: the request of a dependency is an expression/,
     ];
 
     return config;

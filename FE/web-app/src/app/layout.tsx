@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
-import { Toaster } from "react-hot-toast"; // 🧩 Thêm dòng này
+import { Toaster } from "react-hot-toast";
+import SocketIOLoader from "@/components/SocketIOLoader";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,16 +33,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Load socket.io from CDN before app mounts */}
-        <Script
-          src="https://cdn.socket.io/4.8.1/socket.io.min.js"
-          integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+"
-          crossOrigin="anonymous"
-          strategy="beforeInteractive"
-        />
-        
+        <SocketIOLoader />
         {children}
-
         <Toaster position="top-right" reverseOrder={false} />
       </body>
     </html>

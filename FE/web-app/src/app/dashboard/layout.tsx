@@ -2,6 +2,7 @@
 
 import nextDynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
+import SocketGuard from "@/components/SocketGuard";
 
 // Dynamically import NotificationProvider to prevent SSR socket issues
 const NotificationProvider = nextDynamic(
@@ -41,8 +42,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <NotificationProvider>
-      <DynamicContent>{children}</DynamicContent>
-    </NotificationProvider>
+    <SocketGuard>
+      <NotificationProvider>
+        <DynamicContent>{children}</DynamicContent>
+      </NotificationProvider>
+    </SocketGuard>
   );
 }
