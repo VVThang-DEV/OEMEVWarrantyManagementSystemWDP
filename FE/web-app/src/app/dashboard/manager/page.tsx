@@ -29,6 +29,7 @@ import {
   CreateUserAccount,
 } from "@/components/dashboard";
 import TaskAssignmentList from "@/components/dashboard/managerdashboard/TaskAssignmentList";
+import { ManagerCasesList } from "@/components/dashboard/managerdashboard/ManagerCasesList";
 
 interface CurrentUser {
   userId: string;
@@ -85,7 +86,8 @@ export default function ManagerDashboard() {
     { id: "customers", icon: UserCog, label: "Customers" },
     { id: "caselines", icon: CheckSquare, label: "Case Lines" },
     { id: "all-caselines", icon: Layers, label: "All Case Lines" },
-    { id: "tasks", icon: ClipboardList, label: "Task Assignment" },
+    { id: "assign-tasks", icon: ClipboardList, label: "Assign Technicians" },
+    { id: "tasks", icon: CheckSquare, label: "Task Assignments" },
     { id: "schedules", icon: Calendar, label: "Schedules" },
     { id: "warehouse", icon: Warehouse, label: "Warehouse Stock" },
     { id: "transfers", icon: Package, label: "Stock Transfers" },
@@ -104,6 +106,8 @@ export default function ManagerDashboard() {
         return <CaseLineOperations />;
       case "all-caselines":
         return <AllCaseLinesList />;
+      case "assign-tasks":
+        return <ManagerCasesList />;
       case "tasks":
         return <TaskAssignmentList />;
       case "schedules":
