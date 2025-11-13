@@ -17,8 +17,7 @@ export interface VehicleComponent {
     | "RESERVED"
     | "IN_TRANSIT"
     | "WITH_TECHNICIAN"
-    | "INSTALLED"
-    | "RETURNED";
+    | "INSTALLED";
   vehicleVin: string;
   installedAt: string;
   currentHolderId?: string;
@@ -32,9 +31,7 @@ export interface VehicleComponent {
 
 export interface VehicleComponentsResponse {
   status: "success";
-  data: {
-    components: VehicleComponent[];
-  };
+  data: VehicleComponent[];
 }
 
 export interface VehicleHistoryItem {
@@ -225,15 +222,18 @@ export const getVehicleComponents = async (
     | "RESERVED"
     | "IN_TRANSIT"
     | "WITH_TECHNICIAN"
-    | "INSTALLED"
-    | "RETURNED" = "ALL"
+    | "INSTALLED" = "ALL"
 ): Promise<VehicleComponentsResponse> => {
   try {
     const response = await apiClient.get(`/vehicles/${vin}/components`, {
       params: status ? { status } : undefined,
     });
 
-    return response.data;
+    // Backend returns array directly in data field, not wrapped in components property
+    return {
+      status: "success",
+      data: Array.isArray(response.data.data) ? response.data.data : [],
+    };
   } catch (error: unknown) {
     console.error("Error fetching vehicle components:", error);
     throw error;
