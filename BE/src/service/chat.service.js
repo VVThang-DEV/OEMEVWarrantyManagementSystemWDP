@@ -9,20 +9,20 @@ class ChatService {
   #conversationRepository;
   #notificationService;
   #messageRepository;
-  #chats;
+  #chatNamespace;
 
   constructor({
     guestRepository,
     conversationRepository,
     notificationService,
     messageRepository,
-    chats,
+    chatNamespace,
   }) {
     this.#guestRepository = guestRepository;
     this.#conversationRepository = conversationRepository;
     this.#notificationService = notificationService;
     this.#messageRepository = messageRepository;
-    this.#chats = chats;
+    this.#chatNamespace = chatNamespace;
   }
 
   startAnonymousChat = async ({ guestId, serviceCenterId, email }) => {
@@ -119,7 +119,7 @@ class ChatService {
       staffId: userId,
     };
 
-    this.#chats.to(room).emit(event, data);
+    this.#chatNamespace.to(room).emit(event, data);
 
     return rawResult;
   };
@@ -205,7 +205,7 @@ class ChatService {
       closedAt: new Date(),
     };
 
-    this.#chats.to(room).emit(event, data);
+    this.#chatNamespace.to(room).emit(event, data);
 
     return updatedConversation;
   };
