@@ -20,7 +20,7 @@ class NotificationService {
       return false;
     }
 
-    await this.#notificationRepository.create({
+    const notification = await this.#notificationRepository.create({
       roomName,
       eventName,
       data,
@@ -28,7 +28,8 @@ class NotificationService {
 
     this.#notificationNamespace.to(roomName).emit(eventName, {
       ...data,
-      sentAt: dayjs(),
+      notificationId: notification.notificationId,
+      sentAt: dayjs().toISOString(),
       room: roomName,
     });
 
@@ -58,37 +59,37 @@ class NotificationService {
 
   getNotificationsForUser = async ({ user, page, limit }) => {
     const offset = (page - 1) * limit;
-    const roomNames = this._getUserRooms(user);
+    const roomNames = this.#getUserRooms(user);
 
-    if (roomNames.length === 0) {
-      return { count: 0, rows: [] };
-    }
-
-    const notifications = await this.#notificationRepository.findAllByRoomNames({
-      roomNames,
-      limit,
-      offset,
-    });
+    const notifications = await this.#notificationRepository.findAllByRoomNames(
+      {
+        roomNames,
+        userId: user?.userId,
+        limit,
+        offset,
+      }
+    );
 
     return notifications;
   };
 
-  markNotificationAsRead = async (notificationId) => {
-    const affectedRows = await this.#notificationRepository.markAsRead(
-      notificationId
-    );
+  markNotificationAsRead = async ({ notificationId, user }) => {
+    const roomNames = this.#getUserRooms(user);
+    const affectedRows = await this.#notificationRepository.markAsRead({
+      notificationId,
+      userId: user?.userId,
+      roomNames,
+    });
     return affectedRows > 0;
   };
 
   markAllNotificationsAsReadForUser = async ({ user }) => {
     const roomNames = this.#getUserRooms(user);
-
-    if (roomNames.length === 0) {
-      return 0;
-    }
-
     const affectedRows =
-      await this.#notificationRepository.markAllAsReadForRooms(roomNames);
+      await this.#notificationRepository.markAllAsReadForRooms({
+        userId: user?.userId,
+        roomNames,
+      });
     return affectedRows;
   };
 
@@ -127,7 +128,7 @@ class NotificationService {
         break;
     }
 
-    return rooms.filter(Boolean); 
+    return rooms.filter(Boolean);
   };
 }
 

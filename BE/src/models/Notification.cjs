@@ -8,21 +8,35 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         field: "notification_id",
       },
+
+      userId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: "user_id",
+        references: {
+          model: "user",
+          key: "user_id",
+        },
+      },
+
       roomName: {
         type: DataTypes.STRING,
         allowNull: false,
         field: "room_name",
       },
+
       eventName: {
         type: DataTypes.STRING,
         allowNull: false,
         field: "event_name",
       },
+
       data: {
-        type: DataTypes.JSONB,
+        type: DataTypes.JSON,
         allowNull: true,
         field: "data",
       },
+
       isRead: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
@@ -35,6 +49,14 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
     }
   );
+
+  Notification.associate = (models) => {
+    Notification.belongsTo(models.User, {
+      foreignKey: "user_id",
+      as: "user",
+      onDelete: "CASCADE",
+    });
+  };
 
   return Notification;
 };

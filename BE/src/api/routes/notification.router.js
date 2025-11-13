@@ -1,13 +1,25 @@
 import express from "express";
-import container from "../../../../container.js";
 import { authentication } from "../middleware/index.js";
 
 const router = express.Router();
 
-const notificationController = container.resolve("notificationController");
-
-router.get("/", authentication, notificationController.getNotifications);
-router.patch("/:id/read", authentication, notificationController.markAsRead);
-router.post("/mark-all-as-read", authentication, notificationController.markAllAsRead);
+router.get("/", authentication, async (req, res, next) => {
+  const notificationController = req.container.resolve(
+    "notificationController"
+  );
+  await notificationController.getNotifications(req, res, next);
+});
+router.patch("/:id/read", authentication, async (req, res, next) => {
+  const notificationController = req.container.resolve(
+    "notificationController"
+  );
+  await notificationController.markAsRead(req, res, next);
+});
+router.post("/mark-all-as-read", authentication, async (req, res, next) => {
+  const notificationController = req.container.resolve(
+    "notificationController"
+  );
+  await notificationController.markAllAsRead(req, res, next);
+});
 
 export default router;

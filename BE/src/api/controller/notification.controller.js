@@ -7,11 +7,18 @@ class NotificationController {
     try {
       const { user } = req;
       const { page = 1, limit = 10 } = req.query;
-      const notifications = await this.notificationService.getNotificationsForUser({
-        user,
-        page: parseInt(page),
-        limit: parseInt(limit),
-      });
+      const parsedPage = Number.parseInt(page, 10);
+      const parsedLimit = Number.parseInt(limit, 10);
+      const safePage =
+        Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+      const safeLimit =
+        Number.isNaN(parsedLimit) || parsedLimit < 1 ? 10 : parsedLimit;
+      const notifications =
+        await this.notificationService.getNotificationsForUser({
+          user,
+          page: safePage,
+          limit: safeLimit,
+        });
       res.status(200).json({
         status: "success",
         ...notifications,
@@ -24,7 +31,10 @@ class NotificationController {
   markAsRead = async (req, res, next) => {
     try {
       const { id } = req.params;
-      const success = await this.notificationService.markNotificationAsRead(id);
+      const success = await this.notificationService.markNotificationAsRead({
+        notificationId: id,
+        user: req.user,
+      });
       if (success) {
         res.status(200).json({
           status: "success",
@@ -44,7 +54,10 @@ class NotificationController {
   markAllAsRead = async (req, res, next) => {
     try {
       const { user } = req;
-      const affectedRows = await this.notificationService.markAllNotificationsAsReadForUser({ user });
+      const affectedRows =
+        await this.notificationService.markAllNotificationsAsReadForUser({
+          user,
+        });
       res.status(200).json({
         status: "success",
         message: `${affectedRows} notifications marked as read.`,
