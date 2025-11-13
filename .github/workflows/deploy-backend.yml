@@ -68,5 +68,14 @@ jobs:
             pm2 list
             pm2 info backend-app
             
+            # Clear nginx cache and restart
+            echo "=== Clearing nginx cache and restarting ==="
+            sudo rm -rf /var/cache/nginx/* 2>/dev/null || echo "No nginx cache to clear"
+            sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart 2>/dev/null || echo "Could not restart nginx - may need manual intervention"
+            
+            echo "=== Testing backend directly ==="
+            sleep 2
+            curl -s http://localhost:3000/health || curl -s http://localhost:8080/health || echo "Health check endpoint not available"
+            
             # Force nginx to reload if it exists
             sudo systemctl reload nginx 2>/dev/null || echo "Nginx not found or no sudo access"
