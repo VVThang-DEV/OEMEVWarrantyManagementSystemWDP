@@ -37,6 +37,11 @@ jobs:
             command -v pm2 >/dev/null 2>&1 || npm i -g pm2
 
             cd ~/myapp/backend
+            
+            # Verify uploaded file has the fix
+            echo "=== Checking user.repository.js for SQL subquery fix ==="
+            grep -A 5 "Fixed SQL subquery" src/repository/user.repository.js || echo "WARNING: Fix comment not found!"
+            grep "db.sequelize.literal" src/repository/user.repository.js || echo "ERROR: SQL literal not found!"
 
             # Stop PM2 app completely and clear cache
             pm2 describe backend-app >/dev/null 2>&1 && pm2 delete backend-app || true
