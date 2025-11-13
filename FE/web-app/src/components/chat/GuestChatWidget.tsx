@@ -47,9 +47,8 @@ export default function GuestChatWidget({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
-  const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  // Email is now always required - removed useEmail state
+  // Email is now optional - removed useEmail state
   const [resumeMode, setResumeMode] = useState(false);
   const [pastConversations, setPastConversations] = useState<Conversation[]>(
     []
@@ -131,17 +130,8 @@ export default function GuestChatWidget({
   };
 
   const handleStartChat = async () => {
-    if (!guestName.trim()) {
-      setError("Please enter your name");
-      return;
-    }
-
-    if (!guestEmail.trim()) {
-      setError("Please enter your email");
-      return;
-    }
-
-    if (!isValidEmail(guestEmail)) {
+    // Email is now optional - only validate if provided
+    if (guestEmail.trim() && !isValidEmail(guestEmail)) {
       setError("Please enter a valid email address");
       return;
     }
@@ -150,15 +140,17 @@ export default function GuestChatWidget({
     setError(null);
 
     try {
-      // Start anonymous chat with email (now required)
+      // Start anonymous chat with email (optional)
+      // If email is provided, backend will use it to generate persistent guest ID
+      // If no email, pass the temporary guestId
       const session = await startAnonymousChat(
-        undefined,
+        guestEmail.trim() ? undefined : guestId,
         serviceCenterId,
-        guestEmail
+        guestEmail.trim() || undefined
       );
 
-      // Save session info
-      if (typeof window !== "undefined") {
+      // Save session info only if email was provided
+      if (typeof window !== "undefined" && guestEmail.trim()) {
         localStorage.setItem("guestChatEmail", guestEmail);
       }
 
@@ -258,7 +250,7 @@ export default function GuestChatWidget({
       setMessages([
         {
           messageId: "welcome",
-          content: `Hello ${guestName}! Please wait while we connect you with a staff member.`,
+          content: `Hello! Please wait while we connect you with a staff member.`,
           senderId: "system",
           senderType: "staff",
           senderName: "System",
@@ -308,7 +300,7 @@ export default function GuestChatWidget({
         content: messageContent || `📎 ${selectedFile?.name || "attachment"}`,
         senderId: guestId,
         senderType: "guest",
-        senderName: guestName || "You",
+        senderName: "You",
         sentAt: new Date().toISOString(),
         isRead: false,
       };
@@ -344,7 +336,6 @@ export default function GuestChatWidget({
     setConversationId(null);
     setMessages([]);
     setConnectionStatus("idle");
-    setGuestName("");
     setGuestEmail("");
     setInputText("");
     setError(null);
@@ -625,32 +616,14 @@ export default function GuestChatWidget({
                       </motion.p>
                     </div>
 
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        Your Name
-                      </label>
-                      <input
-                        type="text"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Enter your name"
-                        className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
-                      />
-                    </motion.div>
-
-                    {/* Email Input (required) */}
+                    {/* Email Input (optional) */}
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 }}
                     >
                       <label className="block text-sm font-medium text-gray-300 mb-3">
-                        Your Email <span className="text-red-400">*</span>
+                        Your Email
                       </label>
                       <input
                         type="email"
@@ -677,7 +650,7 @@ export default function GuestChatWidget({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5 }}
                       onClick={handleStartChat}
-                      disabled={isConnecting || !guestName.trim()}
+                      disabled={isConnecting}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-emerald-500 text-white py-4 rounded-xl hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3 font-semibold text-base relative overflow-hidden group"
@@ -723,7 +696,7 @@ export default function GuestChatWidget({
                         Resume previous chat with email
                       </button>
 
-                      {/* Resume Form (shown when clicked) */}
+                      {/* Resume Form (shown when email is provided) */}
                       {guestEmail && (
                         <motion.button
                           initial={{ opacity: 0, y: 10 }}
