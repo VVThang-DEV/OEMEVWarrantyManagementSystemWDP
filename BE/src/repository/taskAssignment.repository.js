@@ -141,7 +141,7 @@ class TaskAssignmentRepository {
             {
               model: Vehicle,
               as: "vehicle",
-              attributes: ["vin", "modelId"],
+              attributes: ["vin", "vehicleModelId"],
             },
           ],
         },
