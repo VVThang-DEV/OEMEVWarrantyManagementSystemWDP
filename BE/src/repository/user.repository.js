@@ -53,7 +53,7 @@ class UserRepository {
       whereCondition.status = status;
     }
 
-    // Get the technician role
+    // Get the technician role - Fixed SQL subquery approach (2025-11-14)
     const technicianRole = await Role.findOne({
       where: { roleName: "service_center_technician" },
     });

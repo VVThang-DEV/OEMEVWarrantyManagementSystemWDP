@@ -37,8 +37,15 @@ jobs:
             command -v pm2 >/dev/null 2>&1 || npm i -g pm2
 
             cd ~/myapp/backend
-            npm ci --omit=dev || npm install --production
 
-            # đổi index.js nếu entry khác (vd: src/server.js)
-            pm2 describe backend-app >/dev/null 2>&1 && pm2 restart backend-app || pm2 start server.js --name backend-app
+            # Stop PM2 app completely and clear cache
+            pm2 describe backend-app >/dev/null 2>&1 && pm2 delete backend-app || true
+            pm2 flush
+
+            # Clean install dependencies
+            rm -rf node_modules package-lock.json
+            npm install --production
+
+            # Start fresh PM2 process
+            pm2 start server.js --name backend-app
             pm2 save
