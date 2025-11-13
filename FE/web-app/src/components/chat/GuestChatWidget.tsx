@@ -24,16 +24,14 @@ import {
   Message,
   Conversation,
 } from "@/services/chatService";
-import {
-  initializeChatSocket,
-  joinChatRoom,
-  sendSocketMessage,
-  getChatSocket,
-  disconnectChatSocket,
-  sendTypingIndicator,
-} from "@/lib/socket";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { decodeFileFromContent } from "@/lib/fileMessageUtils";
+
+// Lazy-load socket functions to prevent chunk 153 bundling
+const getSocketFunctions = async () => {
+  const socket = await import("@/lib/socket");
+  return socket;
+};
 
 interface GuestChatWidgetProps {
   serviceCenterId?: string; // Default service center to connect to
@@ -79,12 +77,15 @@ export default function GuestChatWidget({
     }
 
     return () => {
-      if (getChatSocket()) {
-        // Don't disconnect if conversation is active
-        if (connectionStatus !== "active") {
-          disconnectChatSocket();
+      // Use dynamic import to check socket
+      getSocketFunctions().then(({ getChatSocket, disconnectChatSocket }) => {
+        if (getChatSocket()) {
+          // Don't disconnect if conversation is active
+          if (connectionStatus !== "active") {
+            disconnectChatSocket();
+          }
         }
-      }
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -104,6 +105,7 @@ export default function GuestChatWidget({
 
   const initializeSocket = async () => {
     try {
+      const { initializeChatSocket } = await getSocketFunctions();
       await initializeChatSocket();
       setIsConnected(true);
     } catch (err) {
@@ -165,10 +167,11 @@ export default function GuestChatWidget({
       setConnectionStatus("waiting");
 
       // Initialize socket connection only after chat is started
-      initializeSocket();
+      await initializeSocket();
 
       // Set up socket listeners IMMEDIATELY after socket initialization
       // and BEFORE joining the room to avoid missing events
+      const { getChatSocket, joinChatRoom } = await getSocketFunctions();
       const socket = getChatSocket();
       if (socket) {
         console.log("[Guest] Setting up socket listeners before joining room");
@@ -296,6 +299,7 @@ export default function GuestChatWidget({
       };
 
       // Send through socket
+      const { sendSocketMessage } = await getSocketFunctions();
       sendSocketMessage(messageData);
 
       // Add to local state for immediate display
@@ -399,6 +403,7 @@ export default function GuestChatWidget({
 
     // Join room if active
     if (conv.status === "ACTIVE" && conv.guest?.guestId) {
+      const { joinChatRoom } = await getSocketFunctions();
       joinChatRoom(conv.conversationId, conv.guest.guestId, "guest");
     }
   };
@@ -1002,7 +1007,11 @@ export default function GuestChatWidget({
                           onChange={(e) => {
                             setInputText(e.target.value);
                             if (conversationId && e.target.value.trim()) {
-                              sendTypingIndicator(conversationId);
+                              getSocketFunctions().then(
+                                ({ sendTypingIndicator }) => {
+                                  sendTypingIndicator(conversationId);
+                                }
+                              );
                             }
                           }}
                           onKeyPress={handleKeyPress}
