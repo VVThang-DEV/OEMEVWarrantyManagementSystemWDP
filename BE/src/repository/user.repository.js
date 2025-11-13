@@ -53,10 +53,13 @@ class UserRepository {
       whereCondition.status = status;
     }
 
+    // Get the technician role
+    const technicianRole = await Role.findOne({
+      where: { roleName: "service_center_technician" },
+    });
+
     const userCondition = {
-      roleId: await Role.findOne({
-        where: { roleName: "service_center_technician" },
-      }).then((role) => role?.roleId),
+      roleId: technicianRole?.roleId,
     };
 
     if (serviceCenterId) {
