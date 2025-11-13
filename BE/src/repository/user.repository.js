@@ -64,6 +64,7 @@ class UserRepository {
       attributes: [
         "userId",
         "name",
+        "employeeCode",
         [
           db.sequelize.fn(
             "COUNT",
@@ -79,6 +80,7 @@ class UserRepository {
           as: "workSchedule",
           where: whereCondition,
           attributes: ["workDate", "status"],
+          required: false,
         },
         {
           model: TaskAssignment,
@@ -89,7 +91,15 @@ class UserRepository {
         },
       ],
 
-      group: ["userId"],
+      group: [
+        "User.user_id",
+        "User.name",
+        "User.employee_code",
+        "workSchedule.schedule_id",
+        "workSchedule.work_date",
+        "workSchedule.status",
+      ],
+      subQuery: false,
     });
 
     return technicians.map((technician) => technician.toJSON());

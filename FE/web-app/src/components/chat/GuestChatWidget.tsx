@@ -19,6 +19,8 @@ import {
   getConversationMessages,
   getOrCreateGuestId,
   saveGuestConversationId,
+  saveGuestChatSession,
+  getSavedGuestChatSession,
   clearGuestChatSession,
   resumeByEmail,
   Message,
@@ -65,14 +67,60 @@ export default function GuestChatWidget({
 
   const guestId = getOrCreateGuestId();
 
+  // Restore previous session on mount
+  useEffect(() => {
+    const savedSession = getSavedGuestChatSession();
+
+    // Check if session exists and is not too old (24 hours)
+    if (savedSession.conversationId && savedSession.timestamp) {
+      const hoursSinceLastSession =
+        (Date.now() - savedSession.timestamp) / (1000 * 60 * 60);
+
+      if (hoursSinceLastSession < 24) {
+        console.log("🔄 Restoring previous chat session:", savedSession);
+        setConversationId(savedSession.conversationId);
+
+        if (savedSession.email) {
+          setGuestEmail(savedSession.email);
+        }
+
+        // Only restore active conversations, not waiting ones
+        if (savedSession.status === "active") {
+          setConnectionStatus("active");
+          setIsOpen(true);
+        } else if (savedSession.status === "waiting") {
+          // For waiting status, just restore the conversation ID
+          // Don't auto-reconnect until user opens the widget
+          setConnectionStatus("waiting");
+        }
+      } else {
+        // Session expired, clear it
+        console.log("⏰ Previous session expired, clearing...");
+        clearGuestChatSession();
+      }
+    }
+  }, []);
+
   // Ensure component is mounted before rendering portal
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (isOpen && !isConnected) {
-      // Socket initialization moved to handleStartChat
+    // Only restore connection if:
+    // 1. Widget is opened
+    // 2. Not already connected
+    // 3. Has a valid conversationId
+    // 4. Connection status is active (not waiting)
+    if (
+      isOpen &&
+      !isConnected &&
+      conversationId &&
+      connectionStatus === "active"
+    ) {
+      // If widget opens and we have a saved active conversation, reconnect
+      console.log("🔄 Reconnecting to existing conversation:", conversationId);
+      restoreConnection();
     }
 
     return () => {
@@ -129,6 +177,98 @@ export default function GuestChatWidget({
     }
   };
 
+  const restoreConnection = async () => {
+    if (!conversationId) {
+      console.error(
+        "❌ Cannot restore connection: conversationId is undefined"
+      );
+      return;
+    }
+
+    if (connectionStatus !== "active") {
+      console.log("ℹ️ Skipping restoration: conversation is not active");
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      console.log(
+        `🔄 Restoring connection for conversation: ${conversationId}`
+      );
+
+      // Initialize socket connection
+      await initializeSocket();
+
+      // Load existing messages
+      await loadMessages();
+
+      // Set up socket listeners for restored session
+      const { getChatSocket, joinChatRoom } = await getSocketFunctions();
+      const socket = getChatSocket();
+
+      if (socket) {
+        console.log("[Guest] Setting up socket listeners for restored session");
+
+        // Clean up any existing listeners
+        socket.off("newMessage");
+        socket.off("userTyping");
+        socket.off("chatAccepted");
+        socket.off("conversationClosed");
+
+        // Listen for new messages
+        socket.on("newMessage", (data: { newMessage: Message }) => {
+          const normalizedMessage = {
+            ...data.newMessage,
+            senderType: data.newMessage.senderType.toLowerCase() as
+              | "guest"
+              | "staff",
+          };
+          setMessages((prev) => [...prev, normalizedMessage]);
+          setIsTyping(false);
+        });
+
+        // Listen for typing indicator
+        socket.on("userTyping", () => {
+          setIsTyping(true);
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+          }
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsTyping(false);
+          }, 3000);
+        });
+
+        // Listen for conversation closed
+        socket.on(
+          "conversationClosed",
+          (data: { conversationId: string; closedBy: string }) => {
+            if (data.conversationId === conversationId) {
+              setConnectionStatus("closed");
+
+              saveGuestChatSession({
+                conversationId: conversationId,
+                email: guestEmail.trim() || undefined,
+                status: "closed",
+              });
+            }
+          }
+        );
+
+        // Join the conversation room
+        await joinChatRoom(conversationId, guestId, "guest");
+        console.log(`[Guest] Rejoined conversation room: ${conversationId}`);
+      }
+
+      setIsConnecting(false);
+    } catch (err) {
+      console.error("Failed to restore connection:", err);
+      setError("Failed to restore connection. Please try again.");
+      setIsConnecting(false);
+    }
+  };
+
   const handleStartChat = async () => {
     // Email is now optional - only validate if provided
     if (guestEmail.trim() && !isValidEmail(guestEmail)) {
@@ -155,8 +295,14 @@ export default function GuestChatWidget({
       }
 
       setConversationId(session.conversationId);
-      saveGuestConversationId(session.conversationId);
       setConnectionStatus("waiting");
+
+      // Save complete session
+      saveGuestChatSession({
+        conversationId: session.conversationId,
+        email: guestEmail.trim() || undefined,
+        status: "waiting",
+      });
 
       // Initialize socket connection only after chat is started
       await initializeSocket();
@@ -204,6 +350,14 @@ export default function GuestChatWidget({
             console.log("[Guest] Received chatAccepted event:", data);
             if (data.conversationId === session.conversationId) {
               setConnectionStatus("active");
+
+              // Update session status
+              saveGuestChatSession({
+                conversationId: session.conversationId,
+                email: guestEmail.trim() || undefined,
+                status: "active",
+              });
+
               setMessages((prev) => [
                 ...prev,
                 {
@@ -225,6 +379,14 @@ export default function GuestChatWidget({
           "conversationClosed",
           (data: { conversationId: string; closedBy: string }) => {
             if (data.conversationId === session.conversationId) {
+              setConnectionStatus("closed");
+
+              // Update session to closed state
+              saveGuestChatSession({
+                conversationId: session.conversationId,
+                email: guestEmail.trim() || undefined,
+                status: "closed",
+              });
               setConnectionStatus("closed");
               setMessages((prev) => [
                 ...prev,

@@ -308,6 +308,55 @@ export function saveGuestConversationId(conversationId: string): void {
 }
 
 /**
+ * Save complete guest chat session (conversation ID + email + status)
+ */
+export function saveGuestChatSession(data: {
+  conversationId: string;
+  email?: string;
+  status: "idle" | "waiting" | "active" | "closed";
+}): void {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem("guestConversationId", data.conversationId);
+  localStorage.setItem("guestChatStatus", data.status);
+  if (data.email) {
+    localStorage.setItem("guestChatEmail", data.email);
+  }
+  localStorage.setItem("guestChatTimestamp", Date.now().toString());
+}
+
+/**
+ * Get saved guest chat session
+ */
+export function getSavedGuestChatSession(): {
+  conversationId: string | null;
+  email: string | null;
+  status: "idle" | "waiting" | "active" | "closed" | null;
+  timestamp: number | null;
+} {
+  if (typeof window === "undefined") {
+    return { conversationId: null, email: null, status: null, timestamp: null };
+  }
+
+  const conversationId = localStorage.getItem("guestConversationId");
+  const email = localStorage.getItem("guestChatEmail");
+  const status = localStorage.getItem("guestChatStatus") as
+    | "idle"
+    | "waiting"
+    | "active"
+    | "closed"
+    | null;
+  const timestamp = localStorage.getItem("guestChatTimestamp");
+
+  return {
+    conversationId,
+    email,
+    status,
+    timestamp: timestamp ? parseInt(timestamp, 10) : null,
+  };
+}
+
+/**
  * Clear guest chat session
  */
 export function clearGuestChatSession(): void {
@@ -315,5 +364,8 @@ export function clearGuestChatSession(): void {
 
   if (typeof window !== "undefined") {
     localStorage.removeItem(CONVERSATION_ID_KEY);
+    localStorage.removeItem("guestChatEmail");
+    localStorage.removeItem("guestChatStatus");
+    localStorage.removeItem("guestChatTimestamp");
   }
 }
