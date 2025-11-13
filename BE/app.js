@@ -33,6 +33,7 @@ import vehicleModelRouter from "./src/api/routes/vehicleModel.router.js";
 import recallRouter from "./src/api/routes/recall.router.js";
 import roleRouter from "./src/api/routes/role.router.js";
 import publicRouter from "./src/api/routes/public.router.js";
+import notificationRouter from "./src/api/routes/notification.router.js";
 
 app.get("/", async (req, res) => {
   res.send("Hello world");
@@ -60,6 +61,7 @@ app.use(`${url}/task-assignments`, taskAssignmentRouter);
 app.use(`${url}/oem-vehicle-models`, vehicleModelRouter);
 app.use(`${url}/recall-campaigns`, recallRouter);
 app.use(`${url}/roles`, roleRouter);
+app.use(`${url}/notifications`, notificationRouter);
 
 app.use(handleError);
 

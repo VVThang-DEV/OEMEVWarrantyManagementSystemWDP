@@ -35,6 +35,7 @@ import TypeComponentRepository from "./src/repository/typeComponent.repository.j
 import RecallRepository from "./src/repository/recall.repository.js";
 import RoleRepository from "./src/repository/role.repository.js";
 import ServiceCenterRepository from "./src/repository/serviceCenter.repository.js";
+import NotificationRepository from "./src/repository/notification.repository.js"; // New import
 
 // Import services
 import UserService from "./src/service/user.service.js";
@@ -81,6 +82,7 @@ import OemVehicleModelController from "./src/api/controller/oemVehicleModel.cont
 import RecallController from "./src/api/controller/recall.controller.js";
 import RoleController from "./src/api/controller/role.controller.js";
 import PublicController from "./src/api/controller/public.controller.js";
+import NotificationController from "./src/api/controller/notification.controller.js";
 
 const container = createContainer();
 
@@ -176,6 +178,10 @@ export const setupContainer = (socket) => {
       lifetime: Lifetime.SCOPED,
     }),
     serviceCenterRepository: asClass(ServiceCenterRepository, {
+      lifetime: Lifetime.SCOPED,
+    }),
+    notificationRepository: asClass(NotificationRepository, {
+      // New registration
       lifetime: Lifetime.SCOPED,
     }),
 
@@ -295,6 +301,9 @@ export const setupContainer = (socket) => {
       lifetime: Lifetime.SCOPED,
     }),
     publicController: asClass(PublicController, {
+      lifetime: Lifetime.SCOPED,
+    }),
+    notificationController: asClass(NotificationController, {
       lifetime: Lifetime.SCOPED,
     }),
   });

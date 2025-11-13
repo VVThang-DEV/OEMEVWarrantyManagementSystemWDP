@@ -28,17 +28,28 @@ class ChatService {
   startAnonymousChat = async ({ guestId, serviceCenterId, email }) => {
     const rawtResult = await db.sequelize.transaction(async (t) => {
       let actualGuestId = guestId;
+
       let guestEmail = email ? email.toLowerCase() : null;
 
       if (guestEmail) {
         const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
+
         if (!GUEST_TOKEN_SECRET) {
-          throw new Error("GUEST_TOKEN_SECRET is not defined in environment variables.");
+          throw new Error(
+            "GUEST_TOKEN_SECRET is not defined in environment variables."
+          );
         }
-        actualGuestId = crypto.createHash('sha256').update(guestEmail + GUEST_TOKEN_SECRET).digest('hex');
+        actualGuestId = crypto
+          .createHash("sha256")
+          .update(guestEmail + GUEST_TOKEN_SECRET)
+          .digest("hex");
       }
 
-      const guest = await this.#guestRepository.findOrCreate(actualGuestId, t, guestEmail);
+      const guest = await this.#guestRepository.findOrCreate(
+        actualGuestId,
+        t,
+        guestEmail
+      );
 
       const conversation = await this.#conversationRepository.create(
         {
@@ -54,9 +65,9 @@ class ChatService {
     const eventName = "newConversation";
     const data = {
       conversationId: rawtResult.id,
-      guestId: rawtResult.guestId, // Use the actual guestId from the created conversation
+      guestId: rawtResult.guestId,
       serviceCenterId: serviceCenterId,
-      email: email, // Include email in notification
+      email: email,
     };
 
     this.#notificationService.sendToRoom(roomName, eventName, data);
@@ -66,11 +77,19 @@ class ChatService {
 
   resumeByEmail = async ({ email }) => {
     const guestEmail = email.toLowerCase();
+
     const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
+
     if (!GUEST_TOKEN_SECRET) {
-      throw new Error("GUEST_TOKEN_SECRET is not defined in environment variables.");
+      throw new Error(
+        "GUEST_TOKEN_SECRET is not defined in environment variables."
+      );
     }
-    const persistentGuestId = crypto.createHash('sha256').update(guestEmail + GUEST_TOKEN_SECRET).digest('hex');
+
+    const persistentGuestId = crypto
+      .createHash("sha256")
+      .update(guestEmail + GUEST_TOKEN_SECRET)
+      .digest("hex");
 
     const guest = await this.#guestRepository.findById(persistentGuestId);
 
@@ -78,7 +97,10 @@ class ChatService {
       throw new NotFoundError("No conversations found for this email.");
     }
 
-    const conversations = await this.#conversationRepository.getConversationsByGuestId(guest.guestId);
+    const conversations =
+      await this.#conversationRepository.getConversationsByGuestId(
+        guest.guestId
+      );
 
     return conversations;
   };
@@ -164,9 +186,12 @@ class ChatService {
     return messages;
   };
 
-  getMyConversations = async ({ userId }) => {
+  getMyConversations = async ({ userId, status }) => {
     const conversations =
-      await this.#conversationRepository.getConversationsByStaffId(userId);
+      await this.#conversationRepository.getConversationsByStaffId(
+        userId,
+        status
+      );
 
     return conversations;
   };
@@ -190,7 +215,6 @@ class ChatService {
         throw new Error("Conversation is not active.");
       }
 
-      // Pass transaction to closeConversation
       const updatedConversation =
         await this.#conversationRepository.closeConversation(conversationId, t);
 
