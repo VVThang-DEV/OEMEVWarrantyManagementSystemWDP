@@ -125,6 +125,34 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       return;
     }
 
+    // CRITICAL: Wait for Socket.IO CDN to be confirmed loaded
+    if (typeof window !== "undefined" && !window.__SOCKET_IO_LOADED__) {
+      console.log(
+        "⏳ Waiting for Socket.IO CDN to load before initializing notifications..."
+      );
+
+      // Check every 100ms for up to 15 seconds
+      let attempts = 0;
+      const maxAttempts = 150;
+      const checkInterval = setInterval(() => {
+        attempts++;
+        if (window.__SOCKET_IO_LOADED__) {
+          clearInterval(checkInterval);
+          console.log(
+            "✅ Socket.IO CDN confirmed loaded, initializing notifications"
+          );
+          initSocket();
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval);
+          console.error(
+            "❌ Socket.IO CDN failed to load, notifications disabled"
+          );
+        }
+      }, 100);
+
+      return () => clearInterval(checkInterval);
+    }
+
     console.log("🔔 Initializing notification socket...");
 
     // Use async function to handle promise
@@ -449,8 +477,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       }
     };
 
-    // Initialize socket
-    initSocket();
+    // Initialize socket ONLY if CDN is already loaded
+    if (window.__SOCKET_IO_LOADED__) {
+      initSocket();
+    }
+    // Otherwise the interval above will call initSocket() when ready
 
     // Cleanup on unmount
     return () => {
