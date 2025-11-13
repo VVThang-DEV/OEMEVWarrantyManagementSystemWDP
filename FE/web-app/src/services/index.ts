@@ -68,4 +68,3 @@ export { default as technicianService } from "./technicianService";
 // NOTE: Chat service NOT exported here to prevent webpack bundling issues
 // Import directly from "@/services/chatService" when needed
 // This prevents socket.io code from being bundled into shared chunks
-
