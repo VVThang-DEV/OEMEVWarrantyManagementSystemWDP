@@ -42,18 +42,31 @@ jobs:
             echo "=== Checking user.repository.js for SQL subquery fix ==="
             grep -A 5 "Fixed SQL subquery" src/repository/user.repository.js || echo "WARNING: Fix comment not found!"
             grep "db.sequelize.literal" src/repository/user.repository.js || echo "ERROR: SQL literal not found!"
-
-            # Stop PM2 app completely and clear cache
-            pm2 describe backend-app >/dev/null 2>&1 && pm2 delete backend-app || true
+            
+            echo "=== Current directory ==="
+            pwd
+            ls -la
+            
+            echo "=== Checking all PM2 processes ==="
+            pm2 list
+            
+            echo "=== Stopping ALL PM2 processes ==="
+            pm2 delete all || true
             pm2 flush
+            pm2 kill
 
             # Clean install dependencies
             rm -rf node_modules package-lock.json
             npm install --production
 
-            # Start fresh PM2 process
-            pm2 start server.js --name backend-app
+            # Start fresh PM2 process with explicit path
+            echo "=== Starting PM2 from $(pwd) ==="
+            pm2 start server.js --name backend-app --cwd ~/myapp/backend
             pm2 save
+            
+            echo "=== Final PM2 status ==="
+            pm2 list
+            pm2 info backend-app
             
             # Force nginx to reload if it exists
             sudo systemctl reload nginx 2>/dev/null || echo "Nginx not found or no sudo access"
