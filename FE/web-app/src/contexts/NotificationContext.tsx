@@ -12,10 +12,8 @@ import type {
   Notification,
   NotificationSocketData,
 } from "@/types/notification";
-import {
-  initializeNotificationSocket,
-  disconnectNotificationSocket,
-} from "@/lib/socket";
+// CRITICAL FIX: Use dynamic import for socket to prevent bundling issues
+// DO NOT import socket functions at top level
 import { authService } from "@/services";
 
 interface NotificationContextType {
@@ -158,6 +156,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // Use async function to handle promise
     const initSocket = async () => {
       try {
+        // CRITICAL: Dynamic import to prevent socket code from loading prematurely
+        const { initializeNotificationSocket } = await import("@/lib/socket");
+
         const socket = await initializeNotificationSocket(token);
 
         socket.on("connect", () => {
@@ -486,7 +487,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // Cleanup on unmount
     return () => {
       console.log("🧹 Cleaning up notification socket");
-      disconnectNotificationSocket();
+      // Use dynamic import for cleanup too
+      import("@/lib/socket").then(({ disconnectNotificationSocket }) => {
+        disconnectNotificationSocket();
+      });
     };
   }, [addNotification]);
 
