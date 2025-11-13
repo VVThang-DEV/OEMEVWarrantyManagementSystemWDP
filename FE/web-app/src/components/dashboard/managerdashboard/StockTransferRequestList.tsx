@@ -98,6 +98,26 @@ export function StockTransferRequestList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onRequestCreated]);
 
+  // Auto-open detail modal when navigating from notification
+  useEffect(() => {
+    const notificationId = sessionStorage.getItem("selectedItemId");
+    const notificationType = sessionStorage.getItem("selectedItemType");
+
+    if (
+      (notificationType === "stock-transfers" ||
+        notificationType === "transfers") &&
+      notificationId
+    ) {
+      // Auto-open the detail modal
+      setSelectedRequestId(notificationId);
+      setShowDetailModal(true);
+
+      // Clear storage
+      sessionStorage.removeItem("selectedItemId");
+      sessionStorage.removeItem("selectedItemType");
+    }
+  }, []);
+
   const handleStatusFilterChange = async (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {

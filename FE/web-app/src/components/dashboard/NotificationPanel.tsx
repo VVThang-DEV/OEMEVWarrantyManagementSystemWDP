@@ -155,10 +155,19 @@ export function NotificationPanel({
     const navigationAction = notification.data?.navigationAction as
       | string
       | undefined;
+    const navigationId = notification.data?.navigationId as string | undefined;
 
     if (navigationAction && onNavigate) {
-      // Use the navigation callback passed from dashboard (changes active nav state)
+      // Switch to the correct tab
       onNavigate(navigationAction);
+
+      // If there's a navigationId, store it in sessionStorage
+      // so the component can auto-select/highlight that item
+      if (navigationId) {
+        sessionStorage.setItem("selectedItemId", navigationId);
+        sessionStorage.setItem("selectedItemType", navigationAction);
+      }
+
       onClose();
     } else if (notification.actionUrl) {
       // Fallback to URL navigation

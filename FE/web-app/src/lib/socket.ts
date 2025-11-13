@@ -1,7 +1,59 @@
-import { io, Socket } from "socket.io-client";
+// Global window type extension for socket.io CDN
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    io?: any;
+    __SOCKET_IO_LOADED__?: boolean;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Socket = any; // Using any to avoid importing from socket.io-client
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
+
+// PERMANENT FIX: Use socket.io from CDN ONLY (loaded via script tag in layout.tsx)
+// This prevents bundling issues with crypto dependencies
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getSocketIO(): Promise<any> {
+  if (typeof window === "undefined") {
+    throw new Error("Socket.IO can only be used on the client side");
+  }
+
+  // Check if already loaded
+  if (window.io && window.__SOCKET_IO_LOADED__) {
+    return window.io;
+  }
+
+  // Wait for socket.io to load from CDN (max 15 seconds for slower connections)
+  let attempts = 0;
+  const maxAttempts = 150; // 15 seconds
+
+  while (!window.io && attempts < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    attempts++;
+
+    if (attempts % 20 === 0) {
+      console.log(
+        `⏳ Waiting for Socket.IO CDN to load... (${attempts / 10}s)`
+      );
+    }
+  }
+
+  if (!window.io) {
+    console.error("❌ Socket.IO CDN failed to load after 15 seconds");
+    console.error("Make sure the CDN script is in layout.tsx");
+    console.error("URL:", SOCKET_URL);
+    throw new Error(
+      "Socket.IO failed to load from CDN. Please refresh the page."
+    );
+  }
+
+  window.__SOCKET_IO_LOADED__ = true;
+  console.log("✅ Socket.IO loaded from CDN successfully");
+  return window.io;
+}
 
 // ==================== Chat Socket ====================
 
@@ -10,14 +62,20 @@ let chatSocket: Socket | null = null;
 /**
  * Initialize chat socket connection
  */
-export function initializeChatSocket(token?: string): Socket {
+export async function initializeChatSocket(token?: string): Promise<Socket> {
+  // Only initialize on client side
+  if (typeof window === "undefined") {
+    throw new Error("Socket can only be initialized on the client side");
+  }
+
   if (chatSocket && chatSocket.connected) {
     return chatSocket;
   }
 
+  const socketIO = await getSocketIO();
   const auth = token ? { token } : {};
 
-  chatSocket = io(`${SOCKET_URL}/chats`, {
+  chatSocket = socketIO(`${SOCKET_URL}/chats`, {
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionAttempts: 5,
@@ -53,7 +111,7 @@ export function initializeChatSocket(token?: string): Socket {
     console.error("Chat socket reconnection error:", error);
   });
 
-  return chatSocket;
+  return chatSocket as Socket;
 }
 
 /**
@@ -160,12 +218,21 @@ let notificationSocket: Socket | null = null;
 /**
  * Initialize notification socket with authentication token
  */
-export function initializeNotificationSocket(token: string): Socket {
+export async function initializeNotificationSocket(
+  token: string
+): Promise<Socket> {
+  // Only initialize on client side
+  if (typeof window === "undefined") {
+    throw new Error("Socket can only be initialized on the client side");
+  }
+
   if (notificationSocket && notificationSocket.connected) {
     return notificationSocket;
   }
 
-  notificationSocket = io(`${SOCKET_URL}/notifications`, {
+  const socketIO = await getSocketIO();
+
+  notificationSocket = socketIO(`${SOCKET_URL}/notifications`, {
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionAttempts: 5,
@@ -187,7 +254,7 @@ export function initializeNotificationSocket(token: string): Socket {
     console.error("Notification socket connection error:", error);
   });
 
-  return notificationSocket;
+  return notificationSocket as Socket;
 }
 
 /**

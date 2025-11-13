@@ -12,6 +12,7 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  ClipboardList,
   XCircle,
   LucideIcon,
   Image as ImageIcon,
@@ -250,9 +251,14 @@ export function AllCaseLinesList() {
                 <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
               </div>
             ) : caseLines.length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-500 text-sm">No case lines found</p>
+              <div className="text-center py-16">
+                <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-lg font-medium text-gray-900 mb-1">
+                  No case lines found
+                </p>
+                <p className="text-sm text-gray-500">
+                  Try adjusting your filters or search query
+                </p>
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto">

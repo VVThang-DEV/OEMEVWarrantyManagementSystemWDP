@@ -1,6 +1,9 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect } from "react";
+import nextDynamic from "next/dynamic";
 import {
   Home,
   Users,
@@ -22,8 +25,13 @@ import {
   VehicleComponents,
   VehicleHistory,
 } from "@/components/dashboard";
-import { StaffChatDashboard } from "@/components/chat";
 import { StockTransferRequestList } from "@/components/dashboard/managerdashboard";
+
+// Dynamically import StaffChatDashboard to prevent socket.io SSR bundling
+const StaffChatDashboard = nextDynamic(
+  () => import("@/components/chat").then((mod) => mod.StaffChatDashboard),
+  { ssr: false }
+);
 
 interface User {
   userId: string;

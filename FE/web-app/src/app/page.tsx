@@ -1,12 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Header } from "../components/Header";
 import { HeroSection } from "../components/HeroSection";
 import { FeaturesSection } from "../components/FeaturesSection";
 import { WarrantyTypesSection } from "../components/WarrantyTypesSection";
 import { TestimonialsSection } from "../components/TestimonialsSection";
 import { Footer } from "../components/Footer";
-import { GuestChatWidget } from "../components/chat";
+import { TrackingWidget } from "../components/TrackingWidget";
+
+// Dynamically import GuestChatWidget to prevent socket.io SSR bundling
+const GuestChatWidget = dynamic(
+  () => import("../components/chat").then((mod) => mod.GuestChatWidget),
+  { ssr: false }
+);
 
 export default function Home() {
   return (
@@ -56,6 +63,7 @@ export default function Home() {
       <Header />
       <main className="pt-20 relative z-10">
         <HeroSection />
+        <TrackingWidget />
         <FeaturesSection />
         <WarrantyTypesSection />
         <TestimonialsSection />

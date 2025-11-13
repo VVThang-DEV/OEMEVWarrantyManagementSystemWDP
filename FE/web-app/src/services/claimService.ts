@@ -1,6 +1,6 @@
 import apiClient from "@/lib/apiClient";
 import type { CreateClaimRequest, CreateClaimResponse } from "./types";
-import { processingRecordService } from "./index";
+import processingRecordService from "./processingRecordService";
 
 /**
  * Create a new warranty claim (Vehicle Processing Record)

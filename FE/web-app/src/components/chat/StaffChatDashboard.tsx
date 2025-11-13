@@ -21,17 +21,14 @@ import {
   Conversation,
   Message,
 } from "@/services/chatService";
-import {
-  initializeChatSocket,
-  joinChatRoom,
-  sendSocketMessage,
-  getChatSocket,
-  initializeNotificationSocket,
-  getNotificationSocket,
-  sendTypingIndicator,
-} from "@/lib/socket";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { decodeFileFromContent } from "@/lib/fileMessageUtils";
+
+// Lazy-load socket functions to prevent chunk 153 bundling
+const getSocketFunctions = async () => {
+  const socket = await import("@/lib/socket");
+  return socket;
+};
 
 interface StaffChatDashboardProps {
   serviceCenterId?: string; // Can be used for filtering in the future
@@ -88,17 +85,19 @@ export default function StaffChatDashboard({
 
     // Cleanup on unmount
     return () => {
-      const chatSocket = getChatSocket();
-      if (chatSocket) {
-        chatSocket.off("newMessage");
-        chatSocket.off("userTyping");
-      }
+      getSocketFunctions().then(({ getChatSocket, getNotificationSocket }) => {
+        const chatSocket = getChatSocket();
+        if (chatSocket) {
+          chatSocket.off("newMessage");
+          chatSocket.off("userTyping");
+        }
 
-      // Also cleanup notification socket listeners
-      const notifSocket = getNotificationSocket();
-      if (notifSocket) {
-        notifSocket.off("newConversation");
-      }
+        // Also cleanup notification socket listeners
+        const notifSocket = getNotificationSocket();
+        if (notifSocket) {
+          notifSocket.off("newConversation");
+        }
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
@@ -107,6 +106,34 @@ export default function StaffChatDashboard({
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTab]);
+
+  // Auto-open conversation when navigating from notification
+  useEffect(() => {
+    const notificationId = sessionStorage.getItem("selectedItemId");
+    const notificationType = sessionStorage.getItem("selectedItemType");
+
+    if (
+      notificationType === "chat-support" &&
+      notificationId &&
+      conversations.length > 0
+    ) {
+      // Find the conversation by ID
+      const conversation = conversations.find(
+        (c) => c.conversationId === notificationId
+      );
+      if (conversation) {
+        setActiveConversation(conversation);
+        // Switch to the appropriate tab
+        setSelectedTab(
+          conversation.status as "UNASSIGNED" | "ACTIVE" | "CLOSED"
+        );
+      }
+
+      // Clear storage
+      sessionStorage.removeItem("selectedItemId");
+      sessionStorage.removeItem("selectedItemType");
+    }
+  }, [conversations]);
 
   useEffect(() => {
     console.log(
@@ -131,12 +158,14 @@ export default function StaffChatDashboard({
     // Cleanup function to remove listeners when conversation changes
     return () => {
       console.log("[Staff] 🧹 Cleaning up listeners for conversation change");
-      const socket = getChatSocket();
-      if (socket) {
-        socket.off("newMessage");
-        socket.off("userTyping");
-        socket.off("guestLeft");
-      }
+      getSocketFunctions().then(({ getChatSocket }) => {
+        const socket = getChatSocket();
+        if (socket) {
+          socket.off("newMessage");
+          socket.off("userTyping");
+          socket.off("guestLeft");
+        }
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversation]);
@@ -145,13 +174,15 @@ export default function StaffChatDashboard({
     scrollToBottom();
   }, [messages]);
 
-  const initializeSockets = () => {
+  const initializeSockets = async () => {
+    const { initializeChatSocket, initializeNotificationSocket } =
+      await getSocketFunctions();
     // Initialize chat socket with auth token for staff
-    initializeChatSocket(authToken || undefined);
+    await initializeChatSocket(authToken || undefined);
 
     // Initialize notification socket for new chat alerts
     if (authToken) {
-      const notifSocket = initializeNotificationSocket(authToken);
+      const notifSocket = await initializeNotificationSocket(authToken);
 
       // Clean up any existing listeners to prevent duplicates
       notifSocket.off("newConversation");
@@ -169,7 +200,9 @@ export default function StaffChatDashboard({
     }
   };
 
-  const setupChatListeners = () => {
+  const setupChatListeners = async () => {
+    const { getChatSocket, initializeChatSocket, joinChatRoom } =
+      await getSocketFunctions();
     const socket = getChatSocket();
     if (!socket || !activeConversation || !currentUserId) {
       console.log(
@@ -188,7 +221,7 @@ export default function StaffChatDashboard({
         "Connected:",
         socket?.connected
       );
-      initializeChatSocket(authToken || undefined);
+      initializeChatSocket(authToken || undefined).catch(console.error);
       // Retry after a short delay
       setTimeout(() => setupChatListeners(), 1000);
       return;
@@ -330,10 +363,12 @@ export default function StaffChatDashboard({
       return;
 
     // Check if socket is connected
+    const { getChatSocket, initializeChatSocket, sendSocketMessage } =
+      await getSocketFunctions();
     const socket = getChatSocket();
     if (!socket || !socket.connected) {
       console.error("[Staff] Socket not connected! Reinitializing...");
-      initializeChatSocket(authToken || undefined);
+      initializeChatSocket(authToken || undefined).catch(console.error);
       alert("Connection lost. Please try again in a moment.");
       return;
     }
@@ -363,13 +398,16 @@ export default function StaffChatDashboard({
       console.log("[Staff] Socket ID:", socket.id);
 
       // Send through socket
-      sendSocketMessage(messageData, (response) => {
-        console.log("[Staff] Message send response:", response);
-        if (!response.success) {
-          console.error("[Staff] Failed to send message:", response.error);
-          alert("Failed to send message: " + response.error);
+      sendSocketMessage(
+        messageData,
+        (response: { success: boolean; message?: Message; error?: string }) => {
+          console.log("[Staff] Message send response:", response);
+          if (!response.success) {
+            console.error("[Staff] Failed to send message:", response.error);
+            alert("Failed to send message: " + response.error);
+          }
         }
-      });
+      );
 
       // Add to local state for immediate display
       const newMessage: Message = {
@@ -946,8 +984,12 @@ export default function StaffChatDashboard({
                       onChange={(e) => {
                         setInputText(e.target.value);
                         if (activeConversation && e.target.value.trim()) {
-                          sendTypingIndicator(
-                            activeConversation.conversationId
+                          getSocketFunctions().then(
+                            ({ sendTypingIndicator }) => {
+                              sendTypingIndicator(
+                                activeConversation.conversationId
+                              );
+                            }
                           );
                         }
                       }}

@@ -51,8 +51,9 @@ export interface Conversation {
 }
 
 export interface StartChatRequest {
-  guestId: string;
+  guestId?: string;
   serviceCenterId: string;
+  email?: string;
 }
 
 export interface StartChatResponse {
@@ -105,18 +106,24 @@ export interface ConversationsResponse {
 
 /**
  * Start an anonymous chat session (Guest)
+ * @param guestId - Optional guest ID (if not provided with email, backend will generate)
+ * @param serviceCenterId - Service center ID to connect to
+ * @param email - Optional email for persistent chat history
  */
 export async function startAnonymousChat(
-  guestId: string,
-  serviceCenterId: string
+  guestId: string | undefined,
+  serviceCenterId: string,
+  email?: string
 ): Promise<GuestChatSession> {
   try {
+    const payload: StartChatRequest = {
+      serviceCenterId,
+      ...(email ? { email } : { guestId }),
+    };
+
     const response = await apiClient.post<StartChatResponse>(
       "/chats/start-anonymous-chat",
-      {
-        guestId,
-        serviceCenterId,
-      }
+      payload
     );
 
     return response.data.data.conversation;
@@ -199,6 +206,39 @@ export async function getMyConversations(
     return conversations;
   } catch (error) {
     console.error("Error fetching my conversations:", error);
+    throw error;
+  }
+}
+
+/**
+ * Resume conversations by email (Guest)
+ * Returns all conversations associated with the provided email
+ */
+export async function resumeByEmail(email: string): Promise<Conversation[]> {
+  try {
+    const response = await apiClient.post<ConversationsResponse>(
+      "/chats/resume-by-email",
+      { email }
+    );
+
+    // Map backend response to frontend interface
+    const conversations = response.data.data.conversations.map((conv) => ({
+      conversationId: conv.id,
+      guest: conv.guest,
+      lastMessage: conv.messages?.[0]
+        ? {
+            content: conv.messages[0].content,
+            sentAt: conv.messages[0].createdAt,
+          }
+        : undefined,
+      unreadCount: 0,
+      createdAt: conv.createdAt,
+      status: conv.status,
+    }));
+
+    return conversations;
+  } catch (error) {
+    console.error("Error resuming conversations by email:", error);
     throw error;
   }
 }

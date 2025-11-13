@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar,
@@ -14,6 +14,9 @@ import {
   Mail,
   ChevronLeft,
   ChevronRight,
+  Download,
+  FileSpreadsheet,
+  Info,
 } from "lucide-react";
 import workScheduleService, {
   WorkSchedule,
@@ -24,6 +27,7 @@ export function ScheduleManagement() {
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [filters, setFilters] = useState<{
     startDate: string;
     endDate: string;
@@ -37,6 +41,17 @@ export function ScheduleManagement() {
   });
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<{
+    summary: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+    errors?: Array<{
+      row: number;
+      message: string;
+    }>;
+  } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<WorkSchedule | null>(
@@ -50,6 +65,8 @@ export function ScheduleManagement() {
     notes: "",
   });
   const [updating, setUpdating] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadSchedules();
@@ -74,6 +91,30 @@ export function ScheduleManagement() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true);
+      const blob = await workScheduleService.downloadBulkCreateTemplate();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "work_schedules_bulk_create_template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Template downloaded successfully");
+    } catch (error) {
+      console.error("Error downloading template:", error);
+      toast.error("Failed to download template");
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -82,13 +123,21 @@ export function ScheduleManagement() {
         toast.error("Please select an Excel file (.xlsx or .xls)");
         return;
       }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
+        return;
+      }
+
       setSelectedFile(file);
+      setUploadResult(null);
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      toast.error("Please select a file");
+      toast.error("Please select a file first");
       return;
     }
 
@@ -99,24 +148,43 @@ export function ScheduleManagement() {
       const imported = response.data?.imported || 0;
       const failed = response.data?.failed || 0;
 
-      toast.success(
-        `Successfully imported ${imported} schedules${
-          failed > 0 ? `. ${failed} failed.` : ""
-        }`
-      );
+      const result = {
+        summary: {
+          total: imported + failed,
+          successful: imported,
+          failed: failed,
+        },
+        errors: response.data?.errors?.map((err) => ({
+          row: err.row,
+          message: err.message,
+        })),
+      };
 
-      if (response.data?.errors && response.data.errors.length > 0) {
-        console.error("Upload errors:", response.data.errors);
+      setUploadResult(result);
+
+      if (failed === 0) {
+        toast.success(`Successfully imported ${imported} schedules!`);
+        loadSchedules();
+      } else {
+        toast.warning(`Imported ${imported} schedules, ${failed} failed`);
       }
-
-      setShowUploadModal(false);
-      setSelectedFile(null);
-      loadSchedules();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error uploading schedules:", error);
-      toast.error("Failed to upload schedules");
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Failed to upload schedules");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCloseUploadModal = () => {
+    if (!uploading) {
+      setSelectedFile(null);
+      setUploadResult(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setShowUploadModal(false);
     }
   };
 
@@ -781,27 +849,33 @@ export function ScheduleManagement() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => !uploading && setShowUploadModal(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={handleCloseUploadModal}
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-xl shadow-xl max-w-md w-full border border-gray-200"
+            className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl"
           >
+            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  Upload Schedule Excel
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  Import schedules in bulk
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Upload className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Bulk Upload Work Schedules
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Upload Excel file to create multiple work schedules
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setShowUploadModal(false)}
+                onClick={handleCloseUploadModal}
                 disabled={uploading}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
               >
@@ -809,67 +883,193 @@ export function ScheduleManagement() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-900">
-                  <p className="font-semibold mb-2">
-                    Excel Format Requirements:
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Required: technicianId, date, startTime, endTime</li>
-                    <li>Date format: YYYY-MM-DD</li>
-                    <li>Time format: HH:MM (24-hour)</li>
-                    <li>Optional: status, notes</li>
-                  </ul>
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Instructions */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-700 space-y-2">
+                  <p className="font-medium">Instructions:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs">
+                    <li>Download the Excel template below</li>
+                    <li>
+                      Fill in schedule data (Employee Code, Work Date, Status,
+                      Notes)
+                    </li>
+                    <li>Upload the completed file</li>
+                    <li>Review the results</li>
+                  </ol>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Excel File
-                </label>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={handleFileSelect}
-                  disabled={uploading}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                />
-                {selectedFile && (
-                  <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    {selectedFile.name}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
+              {/* Download Template Button */}
               <button
-                onClick={() => setShowUploadModal(false)}
-                disabled={uploading}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 font-medium"
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate || uploading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 font-medium"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploading || !selectedFile}
-                className="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {uploading ? (
+                {downloadingTemplate ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Uploading...
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Downloading Template...
                   </>
                 ) : (
                   <>
-                    <Upload className="w-4 h-4" />
-                    Upload
+                    <Download className="w-5 h-5" />
+                    Download Template
                   </>
                 )}
               </button>
+
+              {/* File Upload Area */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Upload Excel File
+                </label>
+
+                <div
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  className={`
+                    border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
+                    transition-colors
+                    ${
+                      selectedFile
+                        ? "border-blue-300 bg-blue-50"
+                        : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"
+                    }
+                    ${uploading ? "opacity-50 cursor-not-allowed" : ""}
+                  `}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+
+                  {selectedFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <FileSpreadsheet className="w-8 h-8 text-blue-600" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-900">
+                          {selectedFile.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {(selectedFile.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                      {!uploading && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedFile(null);
+                            setUploadResult(null);
+                            if (fileInputRef.current) {
+                              fileInputRef.current.value = "";
+                            }
+                          }}
+                          className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors ml-auto"
+                        >
+                          <X className="w-4 h-4 text-gray-500" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+                      <p className="text-sm text-gray-600">
+                        Click to select Excel file or drag and drop
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Supports .xlsx, .xls (max 10MB)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Upload Result */}
+              {uploadResult && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-3"
+                >
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Total</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {uploadResult.summary.total}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg">
+                      <p className="text-xs text-green-600 mb-1">Successful</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {uploadResult.summary.successful}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-lg">
+                      <p className="text-xs text-red-600 mb-1">Failed</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {uploadResult.summary.failed}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Error Details */}
+                  {uploadResult.errors && uploadResult.errors.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      <p className="text-sm font-medium text-gray-700">
+                        Errors:
+                      </p>
+                      {uploadResult.errors.map((error, index) => (
+                        <div
+                          key={index}
+                          className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2"
+                        >
+                          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div className="text-xs text-red-700">
+                            <p className="font-medium">Row {error.row}</p>
+                            <p>{error.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={handleCloseUploadModal}
+                disabled={uploading}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {uploadResult ? "Close" : "Cancel"}
+              </button>
+              {!uploadResult && (
+                <button
+                  onClick={handleUpload}
+                  disabled={!selectedFile || uploading}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Upload Schedules
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </motion.div>
         </motion.div>

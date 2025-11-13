@@ -6,11 +6,11 @@ import apiClient from "@/lib/apiClient";
  * Handles the component lifecycle during repair:
  * 1. Pickup: Parts coordinator picks up from warehouse (RESERVED → PICKED_UP)
  * 2. Install: Technician installs on vehicle (PICKED_UP → INSTALLED)
- * 3. Return: Parts coordinator returns old component (INSTALLED → RETURNED)
+ *    - When installed, old component is automatically marked as REMOVED
  *
  * ROLE-BASED ACCESS:
- * - parts_coordinator_service_center: pickup, return
- * - service_center_technician: installComponent
+ * - parts_coordinator_service_center: pickup, view reservations
+ * - service_center_technician: installComponent, view reservations
  */
 
 export interface ComponentReservation {
@@ -72,22 +72,6 @@ export interface InstallComponentResponse {
       status: string;
       vehicleVin: string;
       installedAt: string;
-    };
-  };
-}
-
-export interface ReturnComponentRequest {
-  serialNumber: string;
-}
-
-export interface ReturnComponentResponse {
-  status: "success";
-  data: {
-    reservation: ComponentReservation;
-    component: {
-      componentId: string;
-      serialNumber: string;
-      status: string;
     };
   };
 }
@@ -240,32 +224,6 @@ class ComponentReservationService {
       return response.data;
     } catch (error: unknown) {
       console.error("Error installing component:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Return old component after replacement
-   * PATCH /reservations/{reservationId}/return
-   *
-   * Updates:
-   * - Reservation: INSTALLED → RETURNED
-   * - Old component: marked as RETURNED
-   *
-   * @role parts_coordinator_service_center
-   */
-  async returnComponent(
-    reservationId: string,
-    data: ReturnComponentRequest
-  ): Promise<ReturnComponentResponse> {
-    try {
-      const response = await apiClient.patch(
-        `/reservations/${reservationId}/return`,
-        data
-      );
-      return response.data;
-    } catch (error: unknown) {
-      console.error("Error returning component:", error);
       throw error;
     }
   }

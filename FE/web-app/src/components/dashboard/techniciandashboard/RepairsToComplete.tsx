@@ -2,14 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle, Loader2, AlertCircle, Wrench } from "lucide-react";
+import { CheckCircle, AlertCircle, Wrench } from "lucide-react";
 import caseLineService, { CaseLine } from "@/services/caseLineService";
 import { toast } from "sonner";
+import { usePolling } from "@/hooks/usePolling";
+import { MarkRepairCompleteButton } from "./MarkRepairCompleteButton";
 
 export function RepairsToComplete() {
   const [caseLines, setCaseLines] = useState<CaseLine[]>([]);
   const [loading, setLoading] = useState(true);
-  const [completingId, setCompletingId] = useState<string | null>(null);
+
+  // Real-time polling for repairs to complete
+  usePolling(
+    async () => {
+      const response = await caseLineService.getCaseLinesList({
+        status: "IN_REPAIR",
+      });
+      const inRepairLines = response.data?.caseLines || [];
+      setCaseLines(inRepairLines);
+      return inRepairLines;
+    },
+    {
+      interval: 30000, // Poll every 30 seconds
+      enabled: !loading, // Only poll when not loading
+      onError: (err) => {
+        console.error("❌ Repairs polling error:", err);
+      },
+    }
+  );
 
   useEffect(() => {
     fetchInRepairCaseLines();
@@ -35,24 +55,9 @@ export function RepairsToComplete() {
     }
   };
 
-  const handleMarkComplete = async (caseLineId: string) => {
-    if (!caseLineId) {
-      toast.error("Invalid case line ID");
-      return;
-    }
-
-    setCompletingId(caseLineId);
-    try {
-      await caseLineService.markRepairComplete(caseLineId);
-      toast.success("Repair marked as complete!");
-      // Refresh the list
-      await fetchInRepairCaseLines();
-    } catch (error) {
-      console.error("Error marking repair complete:", error);
-      toast.error("Failed to mark repair as complete");
-    } finally {
-      setCompletingId(null);
-    }
+  const handleRepairSuccess = () => {
+    fetchInRepairCaseLines(); // Refresh the list
+    toast.success("Repair marked as complete!");
   };
 
   if (loading) {
@@ -101,9 +106,9 @@ export function RepairsToComplete() {
         </div>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {caseLines.map((caseLine) => {
+          {caseLines.map((caseLine, index) => {
             const caseLineId = caseLine.id || caseLine.caseLineId || "";
-            const isCompleting = completingId === caseLineId;
+            const pendingCount = caseLines.length - index - 1; // Remaining repairs after this one
 
             return (
               <motion.div
@@ -140,23 +145,12 @@ export function RepairsToComplete() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleMarkComplete(caseLineId)}
-                    disabled={isCompleting || !caseLineId}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
-                  >
-                    {isCompleting ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Completing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Complete
-                      </>
-                    )}
-                  </button>
+                  <MarkRepairCompleteButton
+                    caseLineId={caseLineId}
+                    showNextSteps={true}
+                    pendingRepairsCount={pendingCount}
+                    onSuccess={handleRepairSuccess}
+                  />
                 </div>
 
                 {caseLine.warrantyStatus === "INELIGIBLE" && (

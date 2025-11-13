@@ -14,6 +14,7 @@ import {
   Package,
 } from "lucide-react";
 import { processingRecordService, ProcessingRecord } from "@/services";
+import { usePolling } from "@/hooks/usePolling";
 
 interface DashboardOverviewProps {
   onNewClaimClick: () => void;
@@ -34,6 +35,52 @@ export function DashboardOverview({
   });
   const [recentActivity, setRecentActivity] = useState<ProcessingRecord[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Real-time polling for dashboard stats
+  usePolling(
+    async () => {
+      const response = await processingRecordService.getAllRecords({});
+      const records =
+        response.data?.records?.records ||
+        response.data?.records ||
+        response.data ||
+        [];
+
+      const recordsArray = Array.isArray(records) ? records : [];
+
+      // Calculate stats
+      const total = recordsArray.length;
+      const active = recordsArray.filter(
+        (r: ProcessingRecord) =>
+          r.status === "CHECKED_IN" ||
+          r.status === "IN_DIAGNOSIS" ||
+          r.status === "IN_REPAIR"
+      ).length;
+      const completed = recordsArray.filter(
+        (r: ProcessingRecord) => r.status === "COMPLETED"
+      ).length;
+      const pending = recordsArray.filter(
+        (r: ProcessingRecord) => r.status === "WAITING_FOR_PARTS"
+      ).length;
+
+      setStats({
+        totalCases: total,
+        activeCases: active,
+        completedToday: completed,
+        pendingApproval: pending,
+      });
+
+      setRecentActivity(recordsArray.slice(0, 5));
+      return recordsArray;
+    },
+    {
+      interval: 30000, // Poll every 30 seconds
+      enabled: !loading,
+      onError: (err) => {
+        console.error("❌ Dashboard polling error:", err);
+      },
+    }
+  );
 
   useEffect(() => {
     loadDashboardData();

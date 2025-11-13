@@ -34,6 +34,7 @@ interface CaseDetailsModalProps {
   caseId?: string; // Optional - may not exist for new diagnoses
   caseLineId?: string; // If provided, modal will be in edit mode
   onSuccess?: () => void;
+  onNavigateToInstall?: () => void; // Optional callback to navigate to install components
 }
 
 interface CaseLineForm extends CaseLineInput {
@@ -78,6 +79,7 @@ export function CaseDetailsModal({
   caseId,
   caseLineId, // Edit mode if provided
   onSuccess,
+  onNavigateToInstall,
 }: CaseDetailsModalProps) {
   const isEditMode = !!caseLineId;
 
@@ -95,10 +97,16 @@ export function CaseDetailsModal({
   ]);
   const [searchCategory, setSearchCategory] = useState("HIGH_VOLTAGE_BATTERY");
   const [searchQuery, setSearchQuery] = useState("");
-  const [components, setComponents] = useState<CompatibleComponent[]>([]);
+  const [allComponents, setAllComponents] = useState<
+    (CompatibleComponent & { category?: string })[]
+  >([]); // Cache all components with category
+  const [filteredComponents, setFilteredComponents] = useState<
+    (CompatibleComponent & { category?: string })[]
+  >([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState<"category" | "all">("all"); // Default to search all
   const [showComponentSearch, setShowComponentSearch] = useState(false);
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -353,13 +361,20 @@ export function CaseDetailsModal({
     loadCaseLineData();
   }, [isEditMode, caseLineId, caseId, recordId, isOpen]);
 
+  // Load all components from all categories on modal open
   useEffect(() => {
     if (isOpen && recordId) {
       console.log("🔍 CaseDetailsModal opened with recordId:", recordId);
-      searchComponents();
+      loadAllComponents();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, searchCategory]);
+  }, [isOpen]);
+
+  // Filter components when search query changes
+  useEffect(() => {
+    filterComponents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchMode, searchCategory, allComponents]);
 
   // Cleanup image preview URLs when modal closes
   useEffect(() => {
@@ -372,7 +387,8 @@ export function CaseDetailsModal({
     }
   }, [isOpen, diagnosisImages]);
 
-  const searchComponents = async () => {
+  // Load all components from all categories
+  const loadAllComponents = async () => {
     if (!recordId) {
       setErrorMessage(
         "No processing record ID available. Please try refreshing the page."
@@ -381,16 +397,37 @@ export function CaseDetailsModal({
     }
 
     setIsSearching(true);
-    setErrorMessage(""); // Clear previous errors
+    setErrorMessage("");
+
     try {
-      const response = await technicianService.searchCompatibleComponents(
-        recordId, // Use recordId instead of vin
-        searchCategory,
-        searchQuery || undefined
+      // Load components from all categories in parallel
+      const categoryPromises = COMPONENT_CATEGORIES.map((category) =>
+        technicianService
+          .searchCompatibleComponents(recordId, category.value, undefined)
+          .then((response) => ({ category: category.value, response }))
       );
-      setComponents(response.data?.result || []);
+
+      const results = await Promise.all(categoryPromises);
+
+      // Combine all components and remove duplicates, preserving category info
+      const allComponentsMap = new Map<
+        string,
+        CompatibleComponent & { category: string }
+      >();
+      results.forEach(({ category, response }) => {
+        const componentList = response.data?.result || [];
+        componentList.forEach((comp) => {
+          if (!allComponentsMap.has(comp.typeComponentId)) {
+            allComponentsMap.set(comp.typeComponentId, { ...comp, category });
+          }
+        });
+      });
+
+      const combinedComponents = Array.from(allComponentsMap.values());
+      setAllComponents(combinedComponents);
+      setFilteredComponents(combinedComponents);
     } catch (error: unknown) {
-      console.error("Error searching components:", error);
+      console.error("Error loading components:", error);
       const errMsg =
         (
           error as {
@@ -399,12 +436,33 @@ export function CaseDetailsModal({
           }
         )?.response?.data?.message ||
         (error as { message?: string })?.message ||
-        "Failed to search components. Please try again.";
+        "Failed to load components. Please try again.";
       setErrorMessage(errMsg);
-      setComponents([]);
+      setAllComponents([]);
+      setFilteredComponents([]);
     } finally {
       setIsSearching(false);
     }
+  };
+
+  // Filter components based on search query and mode
+  const filterComponents = () => {
+    let filtered = [...allComponents];
+
+    // Filter by category if in category mode
+    if (searchMode === "category") {
+      filtered = filtered.filter((comp) => comp.category === searchCategory);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((comp) =>
+        comp.name.toLowerCase().includes(query)
+      );
+    }
+
+    setFilteredComponents(filtered);
   };
 
   const handleAddCaseLine = () => {
@@ -769,94 +827,169 @@ export function CaseDetailsModal({
               <>
                 {/* Component Search Section */}
                 {showComponentSearch && (
-                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="mb-6 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl shadow-sm">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                        <Package className="w-5 h-5 text-blue-600" />
-                        Search Compatible Components
-                      </h3>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-lg">
+                          <Package className="w-5 h-5 text-blue-600" />
+                          Select Component
+                        </h3>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {allComponents.length} compatible components available
+                        </p>
+                      </div>
                       <button
                         onClick={() => {
                           setShowComponentSearch(false);
                           setActiveLineIndex(null);
+                          setSearchQuery("");
                         }}
-                        className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 rounded-md text-sm font-medium transition-colors"
+                        className="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 hover:text-gray-900 rounded-lg text-sm font-medium transition-colors border border-gray-300"
                       >
-                        Cancel
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
 
-                    <div className="flex gap-3 mb-4">
-                      <select
-                        value={searchCategory}
-                        onChange={(e) => setSearchCategory(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {COMPONENT_CATEGORIES.map((cat) => (
-                          <option key={cat.value} value={cat.value}>
-                            {cat.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    {/* Smart Search Bar */}
+                    <div className="mb-4">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Search by name..."
+                          placeholder="Type to search components (e.g., battery, motor, inverter)..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                          className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                         />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-md"
+                          >
+                            <X className="w-4 h-4 text-gray-400" />
+                          </button>
+                        )}
                       </div>
 
-                      <button
-                        onClick={searchComponents}
-                        disabled={isSearching}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isSearching ? (
-                          <>Searching...</>
-                        ) : (
-                          <>
-                            <Search className="w-4 h-4" />
-                            Search
-                          </>
+                      {/* Search Mode Toggle */}
+                      <div className="flex items-center gap-4 mt-3">
+                        <div className="flex items-center gap-2 bg-white rounded-lg p-1 border border-gray-200">
+                          <button
+                            onClick={() => setSearchMode("all")}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                              searchMode === "all"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 hover:text-gray-900"
+                            }`}
+                          >
+                            All Categories
+                          </button>
+                          <button
+                            onClick={() => setSearchMode("category")}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                              searchMode === "category"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 hover:text-gray-900"
+                            }`}
+                          >
+                            By Category
+                          </button>
+                        </div>
+
+                        {searchMode === "category" && (
+                          <select
+                            value={searchCategory}
+                            onChange={(e) => setSearchCategory(e.target.value)}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {COMPONENT_CATEGORIES.map((cat) => (
+                              <option key={cat.value} value={cat.value}>
+                                {cat.label}
+                              </option>
+                            ))}
+                          </select>
                         )}
-                      </button>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
-                      {components.length === 0 ? (
-                        <div className="col-span-2 text-center py-8 text-gray-500">
-                          No components found
-                        </div>
-                      ) : (
-                        components.map((component) => (
-                          <button
-                            key={component.typeComponentId}
-                            onClick={() => handleSelectComponent(component)}
-                            className="p-4 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="font-medium text-gray-900">
-                                  {component.name}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {component.typeComponentId}
-                                </p>
-                              </div>
-                              {component.isUnderWarranty ? (
-                                <Shield className="w-5 h-5 text-green-600" />
-                              ) : (
-                                <ShieldOff className="w-5 h-5 text-gray-400" />
-                              )}
+                    {/* Loading State */}
+                    {isSearching ? (
+                      <div className="flex flex-col items-center justify-center py-12">
+                        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+                        <p className="text-sm text-gray-600">
+                          Loading components...
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Results Info */}
+                        {searchQuery && (
+                          <div className="mb-3 flex items-center justify-between">
+                            <p className="text-sm text-gray-600">
+                              {filteredComponents.length} result
+                              {filteredComponents.length !== 1 ? "s" : ""} found
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Component Grid */}
+                        <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                          {filteredComponents.length === 0 ? (
+                            <div className="col-span-2 text-center py-12">
+                              <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                              <p className="text-gray-500 font-medium">
+                                {searchQuery
+                                  ? "No components match your search"
+                                  : "No components available"}
+                              </p>
+                              <p className="text-sm text-gray-400 mt-1">
+                                {searchQuery
+                                  ? "Try a different search term"
+                                  : "Please check back later"}
+                              </p>
                             </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
+                          ) : (
+                            filteredComponents.map((component) => (
+                              <button
+                                key={component.typeComponentId}
+                                onClick={() => handleSelectComponent(component)}
+                                className="group p-4 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all text-left bg-white"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors line-clamp-2">
+                                      {component.name}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-1.5 font-mono truncate">
+                                      ID:{" "}
+                                      {component.typeComponentId.slice(0, 8)}...
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    {component.isUnderWarranty ? (
+                                      <div className="flex items-center gap-1 text-green-600">
+                                        <Shield className="w-5 h-5" />
+                                        <span className="text-xs font-medium">
+                                          Warranty
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1 text-gray-400">
+                                        <ShieldOff className="w-5 h-5" />
+                                        <span className="text-xs font-medium">
+                                          No Warranty
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1280,6 +1413,7 @@ export function CaseDetailsModal({
               {showCompleteDiagnosisButton && recordId && (
                 <CompleteDiagnosisButton
                   recordId={recordId}
+                  onNavigateToInstall={onNavigateToInstall}
                   onSuccess={() => {
                     onSuccess?.();
                     onClose();
