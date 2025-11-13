@@ -84,12 +84,14 @@ export default function GuestChatWidget({
           setGuestEmail(savedSession.email);
         }
 
-        if (savedSession.status && savedSession.status !== "closed") {
-          setConnectionStatus(savedSession.status);
-          // Auto-open widget if session was active
-          if (savedSession.status === "active") {
-            setIsOpen(true);
-          }
+        // Only restore active conversations, not waiting ones
+        if (savedSession.status === "active") {
+          setConnectionStatus("active");
+          setIsOpen(true);
+        } else if (savedSession.status === "waiting") {
+          // For waiting status, just restore the conversation ID
+          // Don't auto-reconnect until user opens the widget
+          setConnectionStatus("waiting");
         }
       } else {
         // Session expired, clear it
@@ -105,8 +107,18 @@ export default function GuestChatWidget({
   }, []);
 
   useEffect(() => {
-    if (isOpen && !isConnected && conversationId) {
-      // If widget opens and we have a saved conversation, reconnect
+    // Only restore connection if:
+    // 1. Widget is opened
+    // 2. Not already connected
+    // 3. Has a valid conversationId
+    // 4. Connection status is active (not waiting)
+    if (
+      isOpen &&
+      !isConnected &&
+      conversationId &&
+      connectionStatus === "active"
+    ) {
+      // If widget opens and we have a saved active conversation, reconnect
       console.log("🔄 Reconnecting to existing conversation:", conversationId);
       restoreConnection();
     }
@@ -166,12 +178,26 @@ export default function GuestChatWidget({
   };
 
   const restoreConnection = async () => {
-    if (!conversationId) return;
+    if (!conversationId) {
+      console.error(
+        "❌ Cannot restore connection: conversationId is undefined"
+      );
+      return;
+    }
+
+    if (connectionStatus !== "active") {
+      console.log("ℹ️ Skipping restoration: conversation is not active");
+      return;
+    }
 
     setIsConnecting(true);
     setError(null);
 
     try {
+      console.log(
+        `🔄 Restoring connection for conversation: ${conversationId}`
+      );
+
       // Initialize socket connection
       await initializeSocket();
 
