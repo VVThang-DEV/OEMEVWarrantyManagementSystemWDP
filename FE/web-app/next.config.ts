@@ -1,11 +1,7 @@
-// Build timestamp: 2025-11-13 - Force Railway rebuild to eliminate chunk 153
+// Build timestamp: 2025-11-13 05:25 UTC - Force Railway rebuild
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Force clean build - Railway cache buster
-  generateBuildId: async () => {
-    return `build-${Date.now()}-no-chunk-153`;
-  },
   reactStrictMode: false,
   eslint: {
     ignoreDuringBuilds: true,

@@ -14,7 +14,8 @@ import type {
 } from "@/types/notification";
 // CRITICAL FIX: Use dynamic import for socket to prevent bundling issues
 // DO NOT import socket functions at top level
-import { authService } from "@/services";
+// Import authService directly to avoid barrel export chunk bundling
+import authService from "@/services/authService";
 
 interface NotificationContextType {
   notifications: Notification[];
