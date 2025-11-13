@@ -62,7 +62,7 @@ export function ComponentPickupList({
       return items;
     },
     {
-      interval: 30000, // Poll every 30 seconds
+      interval: 120000, // Poll every 2 minutes
       enabled: !loading && !pickingUp,
       onError: (err) => {
         console.error("❌ Pickup list polling error:", err);

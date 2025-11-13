@@ -120,7 +120,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
       return validRecords;
     },
     {
-      interval: 30000, // Poll every 30 seconds
+      interval: 120000, // Poll every 2 minutes
       enabled:
         !loading &&
         !showDetailsModal &&
@@ -135,9 +135,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
 
   // Initial fetch on mount or filter change
   useEffect(() => {
-    if (statusFilter !== "ALL") {
-      fetchRecords();
-    }
+    fetchRecords();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 

@@ -49,7 +49,7 @@ export default function GuestChatWidget({
   const [inputText, setInputText] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  const [useEmail, setUseEmail] = useState(false);
+  // Email is now always required - removed useEmail state
   const [resumeMode, setResumeMode] = useState(false);
   const [pastConversations, setPastConversations] = useState<Conversation[]>(
     []
@@ -136,12 +136,12 @@ export default function GuestChatWidget({
       return;
     }
 
-    if (useEmail && !guestEmail.trim()) {
+    if (!guestEmail.trim()) {
       setError("Please enter your email");
       return;
     }
 
-    if (useEmail && !isValidEmail(guestEmail)) {
+    if (!isValidEmail(guestEmail)) {
       setError("Please enter a valid email address");
       return;
     }
@@ -150,15 +150,15 @@ export default function GuestChatWidget({
     setError(null);
 
     try {
-      // Start anonymous chat with email or guestId
+      // Start anonymous chat with email (now required)
       const session = await startAnonymousChat(
-        useEmail ? undefined : guestId,
+        undefined,
         serviceCenterId,
-        useEmail ? guestEmail : undefined
+        guestEmail
       );
 
       // Save session info
-      if (useEmail && typeof window !== "undefined") {
+      if (typeof window !== "undefined") {
         localStorage.setItem("guestChatEmail", guestEmail);
       }
 
@@ -643,48 +643,24 @@ export default function GuestChatWidget({
                       />
                     </motion.div>
 
-                    {/* Email Option Toggle */}
+                    {/* Email Input (required) */}
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 }}
-                      className="flex items-center gap-3"
                     >
-                      <input
-                        type="checkbox"
-                        id="useEmail"
-                        checked={useEmail}
-                        onChange={(e) => setUseEmail(e.target.checked)}
-                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-2 focus:ring-blue-500/50"
-                      />
-                      <label
-                        htmlFor="useEmail"
-                        className="text-sm text-gray-300 cursor-pointer"
-                      >
-                        Save chat history with email (optional)
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        Your Email <span className="text-red-400">*</span>
                       </label>
+                      <input
+                        type="email"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="your.email@example.com"
+                        className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
+                      />
                     </motion.div>
-
-                    {/* Email Input (conditional) */}
-                    {useEmail && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                      >
-                        <label className="block text-sm font-medium text-gray-300 mb-3">
-                          Your Email
-                        </label>
-                        <input
-                          type="email"
-                          value={guestEmail}
-                          onChange={(e) => setGuestEmail(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="your.email@example.com"
-                          className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
-                        />
-                      </motion.div>
-                    )}
 
                     {error && (
                       <motion.div
@@ -740,8 +716,7 @@ export default function GuestChatWidget({
                       <button
                         onClick={() => {
                           setResumeMode(false);
-                          setUseEmail(true);
-                          // Show resume form inline
+                          // Email is always enabled now
                         }}
                         className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
                       >
@@ -749,7 +724,7 @@ export default function GuestChatWidget({
                       </button>
 
                       {/* Resume Form (shown when clicked) */}
-                      {useEmail && guestEmail && (
+                      {guestEmail && (
                         <motion.button
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}

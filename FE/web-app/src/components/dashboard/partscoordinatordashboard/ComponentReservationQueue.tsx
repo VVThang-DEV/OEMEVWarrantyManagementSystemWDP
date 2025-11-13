@@ -68,7 +68,7 @@ export default function ComponentReservationQueue() {
       return result.data.reservations;
     },
     {
-      interval: 30000, // Poll every 30 seconds
+      interval: 120000, // Poll every 2 minutes
       enabled: !loading,
       onError: (err) => {
         console.error("❌ Reservation polling error:", err);

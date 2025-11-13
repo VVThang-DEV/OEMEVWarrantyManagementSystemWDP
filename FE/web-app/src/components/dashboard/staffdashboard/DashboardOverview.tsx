@@ -74,7 +74,7 @@ export function DashboardOverview({
       return recordsArray;
     },
     {
-      interval: 30000, // Poll every 30 seconds
+      interval: 120000, // Poll every 2 minutes
       enabled: !loading,
       onError: (err) => {
         console.error("❌ Dashboard polling error:", err);
