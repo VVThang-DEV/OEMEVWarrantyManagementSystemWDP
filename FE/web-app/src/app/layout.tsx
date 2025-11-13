@@ -1,3 +1,4 @@
+// Force rebuild: 2025-11-13 05:15 UTC - Eliminate chunk 153 cache
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";

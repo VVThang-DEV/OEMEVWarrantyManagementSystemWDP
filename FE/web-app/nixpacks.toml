@@ -5,7 +5,13 @@ nixPkgs = ["nodejs_20"]
 cmds = ["npm ci --legacy-peer-deps || npm install --legacy-peer-deps"]
 
 [phases.build]
-cmds = ["rm -rf .next || true", "npm run build"]
+# Force cache invalidation with timestamp comment
+# Build: 2025-11-13-05:15 UTC - eliminate chunk 153
+cmds = [
+  "echo 'Force rebuild - timestamp: 2025-11-13-05:15'",
+  "rm -rf .next .next.* || true",
+  "npm run build"
+]
 
 [start]
 cmd = "npm start"
