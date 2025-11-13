@@ -53,7 +53,11 @@ class UserRepository {
       whereCondition.status = status;
     }
 
-    const userCondition = {};
+    const userCondition = {
+      roleId: await Role.findOne({
+        where: { roleName: "service_center_technician" },
+      }).then((role) => role?.roleId),
+    };
 
     if (serviceCenterId) {
       userCondition.serviceCenterId = serviceCenterId;
@@ -66,10 +70,12 @@ class UserRepository {
         "name",
         "employeeCode",
         [
-          db.sequelize.fn(
-            "COUNT",
-            db.sequelize.col("tasks.task_assignment_id")
-          ),
+          db.sequelize.literal(`(
+            SELECT COUNT(*)
+            FROM task_assignment
+            WHERE task_assignment.technician_id = User.user_id
+            AND task_assignment.is_active = true
+          )`),
           "activeTaskCount",
         ],
       ],
@@ -82,24 +88,7 @@ class UserRepository {
           attributes: ["workDate", "status"],
           required: false,
         },
-        {
-          model: TaskAssignment,
-          as: "tasks",
-          where: { isActive: true },
-          required: false,
-          attributes: [],
-        },
       ],
-
-      group: [
-        "User.user_id",
-        "User.name",
-        "User.employee_code",
-        "workSchedule.schedule_id",
-        "workSchedule.work_date",
-        "workSchedule.status",
-      ],
-      subQuery: false,
     });
 
     return technicians.map((technician) => technician.toJSON());
