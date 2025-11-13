@@ -1,4 +1,3 @@
-import { where } from "sequelize";
 import db from "../models/index.cjs";
 const {
   Vehicle,

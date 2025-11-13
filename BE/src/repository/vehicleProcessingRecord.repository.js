@@ -572,7 +572,6 @@ class VehicleProcessingRecordRepository {
                 "repairTechId",
                 "diagnosticTechId",
                 "quantity",
-                "name",
               ],
 
               include: [

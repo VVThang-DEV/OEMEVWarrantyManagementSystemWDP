@@ -1,5 +1,6 @@
 import db from "../models/index.cjs";
 import { ConflictError, NotFoundError } from "../error/index.js";
+import { Sequelize } from "sequelize";
 
 const {
   TaskAssignment,
@@ -21,6 +22,34 @@ class TaskAssignmentRepository {
       transaction,
     });
     return count;
+  };
+
+  countTasksForTechniciansOnDate = async (
+    { technicianIds, date },
+    transaction = null
+  ) => {
+    const taskCounts = await TaskAssignment.findAll({
+      attributes: [
+        "technicianId",
+        [
+          Sequelize.fn("COUNT", Sequelize.col("task_assignment_id")),
+          "taskCount",
+        ],
+      ],
+      where: {
+        technicianId: technicianIds,
+        [Sequelize.where(
+          Sequelize.fn("DATE", Sequelize.col("assigned_at")),
+          "=",
+          date
+        )]: "",
+      },
+      group: ["technicianId"],
+      raw: true,
+      transaction,
+    });
+
+    return taskCounts;
   };
 
   createDiagnosisTaskForRecord = async (
@@ -112,7 +141,7 @@ class TaskAssignmentRepository {
             {
               model: Vehicle,
               as: "vehicle",
-              attributes: ["vin", "vehicleModelId", "licensePlate"],
+              attributes: ["vin", "modelId"],
             },
           ],
         },
