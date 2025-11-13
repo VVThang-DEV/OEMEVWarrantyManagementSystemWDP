@@ -87,6 +87,38 @@ router.post("/start-anonymous-chat", async (req, res, next) => {
 
 /**
  * @swagger
+ * /chat/resume-by-email:
+ *   post:
+ *     summary: Resume conversations by email
+ *     description: Retrieve all conversations associated with a guest email address
+ *     tags: [Chat]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "guest@example.com"
+ *     responses:
+ *       200:
+ *         description: Conversations retrieved successfully
+ *       404:
+ *         description: No conversations found for this email
+ */
+router.post("/resume-by-email", async (req, res, next) => {
+  const chatController = req.container.resolve("chatController");
+
+  await chatController.resumeByEmail(req, res, next);
+});
+
+/**
+ * @swagger
  * /chat/conversations/{conversationId}/accept:
  *   patch:
  *     summary: Nhận cuộc trò chuyện ẩn danh

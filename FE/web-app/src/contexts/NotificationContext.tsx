@@ -11,11 +11,19 @@ import React, {
 import type {
   Notification,
   NotificationSocketData,
+  NotificationType,
+  NotificationPriority,
 } from "@/types/notification";
 // CRITICAL FIX: Use dynamic import for socket to prevent bundling issues
 // DO NOT import socket functions at top level
 // Import authService directly to avoid barrel export chunk bundling
 import authService from "@/services/authService";
+import {
+  getNotifications as fetchNotifications,
+  markNotificationAsRead as markNotificationAsReadAPI,
+  markAllNotificationsAsRead as markAllNotificationsAsReadAPI,
+  type NotificationResponse,
+} from "@/services/notificationService";
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -26,6 +34,7 @@ interface NotificationContextType {
   clearNotification: (notificationId: string) => void;
   clearAllNotifications: () => void;
   isConnected: boolean;
+  isLoading: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
@@ -49,9 +58,48 @@ interface NotificationProviderProps {
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Calculate unread count
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Load initial notifications from backend
+  useEffect(() => {
+    const token = authService.getToken();
+    if (!token) return;
+
+    setIsLoading(true);
+    fetchNotifications(1, 50)
+      .then((backendNotifications) => {
+        // Convert backend format to frontend format
+        const convertedNotifications: Notification[] = backendNotifications.map(
+          (n: NotificationResponse) => ({
+            id: n.notificationId,
+            type: (n.data?.type as NotificationType) || "general",
+            priority: (n.data?.priority as NotificationPriority) || "medium",
+            title: (n.data?.title as string) || "Notification",
+            message: (n.data?.message as string) || "",
+            timestamp: n.createdAt,
+            read: n.isRead,
+            actionUrl: n.data?.actionUrl as string,
+            data: n.data || {},
+            senderId: n.data?.senderId as string,
+            senderName: n.data?.senderName as string,
+            senderRole: n.data?.senderRole as string,
+          })
+        );
+        setNotifications(convertedNotifications);
+        console.log(
+          `✅ Loaded ${convertedNotifications.length} notifications from backend`
+        );
+      })
+      .catch((error) => {
+        console.error("❌ Failed to load notifications:", error);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
 
   // Add a new notification
   const addNotification = useCallback(
@@ -96,11 +144,21 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
+
+    // Sync with backend
+    markNotificationAsReadAPI(notificationId).catch((error) => {
+      console.error("❌ Failed to mark notification as read:", error);
+    });
   }, []);
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+    // Sync with backend
+    markAllNotificationsAsReadAPI().catch((error) => {
+      console.error("❌ Failed to mark all notifications as read:", error);
+    });
   }, []);
 
   // Clear a specific notification
@@ -517,6 +575,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     clearNotification,
     clearAllNotifications,
     isConnected,
+    isLoading,
   };
 
   return (
