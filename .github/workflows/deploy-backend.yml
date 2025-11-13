@@ -54,3 +54,6 @@ jobs:
             # Start fresh PM2 process
             pm2 start server.js --name backend-app
             pm2 save
+            
+            # Force nginx to reload if it exists
+            sudo systemctl reload nginx 2>/dev/null || echo "Nginx not found or no sudo access"
