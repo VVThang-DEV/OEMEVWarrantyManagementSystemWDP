@@ -13,9 +13,8 @@ export interface NotificationResponse {
 
 interface GetNotificationsResponse {
   status: string;
-  data: {
-    notifications: NotificationResponse[];
-  };
+  count: number;
+  rows: NotificationResponse[];
 }
 
 interface MarkAsReadResponse {
@@ -38,10 +37,17 @@ export async function getNotifications(
       }
     );
 
-    return response.data.data.notifications;
+    // Handle empty or undefined response
+    if (!response.data?.rows) {
+      console.warn("No notifications in response, returning empty array");
+      return [];
+    }
+
+    return response.data.rows;
   } catch (error) {
     console.error("Error fetching notifications:", error);
-    throw error;
+    // Return empty array instead of throwing to prevent app crash
+    return [];
   }
 }
 
