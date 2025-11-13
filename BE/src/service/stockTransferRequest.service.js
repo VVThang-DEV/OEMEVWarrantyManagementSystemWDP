@@ -38,6 +38,84 @@ class StockTransferRequestService {
     this.#inventoryService = inventoryService;
   }
 
+  createWarehouseRestockRequest = async ({
+    requestingWarehouseId,
+    items,
+    requestedByUserId,
+    companyId,
+  }) => {
+    const rawResult = await db.sequelize.transaction(async (transaction) => {
+      const skus = items.map((item) => item.sku);
+      const typeComponents = await this.#typeComponentRepository.findBySkus(
+        skus,
+        transaction
+      );
+
+      if (typeComponents.length !== skus.length) {
+        const foundSkus = new Set(typeComponents.map((tc) => tc.sku));
+        const notFoundSkus = skus.filter((sku) => !foundSkus.has(sku));
+        throw new NotFoundError(
+          `Some SKUs not found: ${notFoundSkus.join(", ")}`
+        );
+      }
+
+      const skuToTypeComponentIdMap = new Map(
+        typeComponents.map((tc) => [tc.sku, tc.typeComponentId])
+      );
+
+      const newStockTransferRequest =
+        await this.#stockTransferRequestRepository.createStockTransferRequest(
+          {
+            requestingWarehouseId,
+            requestedByUserId,
+            requestedAt: formatUTCtzHCM(dayjs()),
+            requestType: "WAREHOUSE_RESTOCK",
+            status: "PENDING_APPROVAL",
+          },
+          transaction
+        );
+
+      const itemsToCreate = items.map((item) => ({
+        typeComponentId: skuToTypeComponentIdMap.get(item.sku),
+        quantityRequested: item.quantityRequested,
+        requestId: newStockTransferRequest?.id,
+      }));
+
+      const rawItems =
+        await this.#stockTransferRequestItemRepository.createStockTransferRequestItems(
+          {
+            items: itemsToCreate,
+          },
+          transaction
+        );
+
+      return { newStockTransferRequest, rawItems };
+    });
+
+    const formatRawItems = rawResult.rawItems.map((item) => ({
+      ...item,
+      createdAt: formatUTCtzHCM(item.createdAt),
+      updatedAt: formatUTCtzHCM(item.updatedAt),
+    }));
+
+    const roomName = `emv_staff_${companyId}`;
+
+    this.#notificationService.sendToRoom(
+      roomName,
+      "new_stock_transfer_request",
+      { request: rawResult.newStockTransferRequest }
+    );
+
+    return {
+      newStockTransferRequest: {
+        ...rawResult.newStockTransferRequest,
+        createdAt: formatUTCtzHCM(rawResult.newStockTransferRequest.createdAt),
+        updatedAt: formatUTCtzHCM(rawResult.newStockTransferRequest.updatedAt),
+      },
+      items: formatRawItems,
+    };
+  };
+
   createStockTransferRequest = async ({
     requestingWarehouseId,
     items,
@@ -51,6 +129,7 @@ class StockTransferRequestService {
             requestingWarehouseId,
             requestedByUserId,
             requestedAt: formatUTCtzHCM(dayjs()),
+            requestType: "CASELINE",
           },
           transaction
         );
@@ -155,6 +234,178 @@ class StockTransferRequestService {
       });
 
     return stockTransferRequest;
+  };
+
+  approveWarehouseRestockRequest = async ({
+    id,
+    roleName,
+    companyId,
+    approvedByUserId,
+  }) => {
+    const rawResult = await db.sequelize.transaction(async (transaction) => {
+      const approvedStockTransferRequest =
+        await this.#stockTransferRequestRepository.getStockTransferRequestById(
+          {
+            id,
+          },
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+
+      if (!approvedStockTransferRequest) {
+        throw new NotFoundError("Stock transfer request not found");
+      }
+
+      if (approvedStockTransferRequest.requestType !== "WAREHOUSE_RESTOCK") {
+        throw new ConflictError(
+          `Request with ID ${id} is not a WAREHOUSE_RESTOCK type.`
+        );
+      }
+
+      if (approvedStockTransferRequest.status !== "PENDING_APPROVAL") {
+        throw new ConflictError(
+          `Only requests with status PENDING_APPROVAL can be approved. Current status: ${approvedStockTransferRequest.status}`
+        );
+      }
+
+      const requestId = approvedStockTransferRequest.id;
+
+      const stockTransferRequestItems =
+        await this.#stockTransferRequestItemRepository.getStockTransferRequestItemsByRequestId(
+          {
+            requestId: requestId,
+          },
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+
+      if (
+        !stockTransferRequestItems ||
+        stockTransferRequestItems.length === 0
+      ) {
+        throw new Error(`Request ${requestId} has no items.`);
+      }
+
+      const typeComponentIdsNeeded = stockTransferRequestItems.map(
+        (item) => item.typeComponentId
+      );
+
+      const stocks =
+        await this.#warehouseRepository.findStocksByTypeComponentOrderByWarehousePriority(
+          {
+            typeComponentIds: typeComponentIdsNeeded,
+            context: "COMPANY",
+            entityId: companyId,
+          },
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+
+      const stocksGroupedByType = stocks.reduce((acc, stock) => {
+        if (!acc[stock.typeComponent.typeComponentId]) {
+          acc[stock.typeComponent.typeComponentId] = [];
+        }
+
+        acc[stock.typeComponent.typeComponentId].push(stock);
+
+        return acc;
+      }, {});
+
+      const stockReservationsToCreate = [];
+      const stockUpdates = [];
+
+      for (const item of stockTransferRequestItems) {
+        const stocksForItem = stocksGroupedByType[item.typeComponentId] || [];
+
+        const totalAvailable = stocksForItem.reduce(
+          (sum, s) => sum + (s.quantityInStock - s.quantityReserved),
+          0
+        );
+
+        if (totalAvailable < item.quantityRequested) {
+          throw new ConflictError(
+            `Not enough available stock in company warehouse for component '${item.typeComponentId}'. ` +
+              `Requested: ${item.quantityRequested}, Total available: ${totalAvailable}.`
+          );
+        }
+
+        const allocations = this.#allocateStock({
+          stocks: stocksForItem,
+          item: {
+            typeComponentId: item.typeComponentId,
+            quantityReserved: item.quantityRequested,
+          },
+        });
+
+        for (const allocation of allocations) {
+          stockReservationsToCreate.push({
+            stockId: allocation.stockId,
+            requestId: requestId,
+            typeComponentId: item.typeComponentId,
+            quantityReserved: allocation.quantityReserved,
+            status: "RESERVED",
+          });
+
+          stockUpdates.push({
+            stockId: allocation.stockId,
+            quantityReserved: allocation.quantityReserved,
+          });
+        }
+      }
+
+      if (stockReservationsToCreate.length > 0) {
+        await this.#stockReservationRepository.bulkCreate(
+          { reservations: stockReservationsToCreate },
+          transaction
+        );
+      }
+
+      if (stockUpdates.length > 0) {
+        await this.#warehouseRepository.bulkUpdateStockQuantities(
+          stockUpdates,
+          transaction
+        );
+      }
+
+      const updatedStockTransferRequest =
+        await this.#stockTransferRequestRepository.updateStockTransferRequestStatus(
+          { requestId, status: "APPROVED", approvedByUserId },
+          transaction
+        );
+
+      const requestWithDetails =
+        await this.#stockTransferRequestRepository.getStockTransferRequestById(
+          { id: requestId },
+          transaction
+        );
+
+      return {
+        stockReservations: stockReservationsToCreate,
+        stockUpdates,
+        updatedStockTransferRequest,
+        requestWithDetails,
+      };
+    });
+
+    const { requestWithDetails, stockUpdates = [] } = rawResult;
+
+    const roomName = `parts_coordinator_service_center_${requestWithDetails.requestingWarehouse.serviceCenterId}`;
+    const eventName = "stock_transfer_request_approved";
+    const data = requestWithDetails;
+
+    this.#notificationService.sendToRoom(roomName, eventName, data);
+
+    const affectedStockIds = stockUpdates
+      .map((update) => update.stockId)
+      .filter(Boolean);
+
+    if (affectedStockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: affectedStockIds,
+      });
+    }
+
+    return rawResult;
   };
 
   approveStockTransferRequest = async ({
@@ -865,6 +1116,199 @@ class StockTransferRequestService {
     }
 
     return rawResult;
+  };
+
+  dispatchWarehouseRestockRequestWithFile = async ({
+    requestId,
+    componentsBySku,
+    dispatchedByUserId,
+    roleName,
+    companyId,
+  }) => {
+    let serviceCenterRequest;
+    const rawResult = await db.sequelize.transaction(async (transaction) => {
+      const existingRequest =
+        await this.#stockTransferRequestRepository.getStockTransferRequestById(
+          { id: requestId },
+          transaction,
+          Transaction.LOCK.UPDATE
+        );
+
+      if (!existingRequest) {
+        throw new NotFoundError(
+          `Stock transfer request with ID ${requestId} not found`
+        );
+      }
+
+      if (existingRequest.requestType !== "WAREHOUSE_RESTOCK") {
+        throw new ConflictError(
+          `Request with ID ${requestId} is not a WAREHOUSE_RESTOCK type.`
+        );
+      }
+
+      if (existingRequest.status !== "APPROVED") {
+        throw new ConflictError(
+          `Only approved WAREHOUSE_RESTOCK requests can be dispatched. Current status: ${existingRequest.status}`
+        );
+      }
+
+      serviceCenterRequest =
+        existingRequest?.requestingWarehouse?.serviceCenterId;
+      const oemWarehouseId =
+        existingRequest?.requestingWarehouse?.vehicleCompany?.warehouseId;
+      const targetServiceCenterWarehouseId =
+        existingRequest.requestingWarehouseId;
+
+      if (!oemWarehouseId) {
+        throw new NotFoundError("OEM warehouse not found for this company.");
+      }
+
+      if (!targetServiceCenterWarehouseId) {
+        throw new NotFoundError(
+          "Requesting service center warehouse not found."
+        );
+      }
+
+      const stockUpdates = [];
+      const collectedComponents = [];
+
+      for (const sku in componentsBySku) {
+        const components = componentsBySku[sku];
+        const quantity = components.length;
+
+        // 1. Perform OUT adjustment from OEM warehouse
+        const oemStock = await this.#warehouseRepository.findStockBySku(
+          sku,
+          oemWarehouseId,
+          transaction
+        );
+
+        if (!oemStock) {
+          throw new NotFoundError(
+            `Stock item with SKU ${sku} not found in OEM warehouse ${oemWarehouseId}`
+          );
+        }
+
+        // Use the internal #performAdjustment logic for OUT from OEM
+        const oemAdjustmentResult =
+          await this.#inventoryService._performAdjustment({
+            // Accessing private method for reuse
+            stockId: oemStock.stockId,
+            adjustmentType: "OUT",
+            reason: `Dispatch for Stock Transfer Request ${requestId}`,
+            note: `Dispatched by ${dispatchedByUserId}`,
+            components,
+            adjustedByUserId: dispatchedByUserId,
+            roleName,
+            companyId,
+            transaction,
+          });
+        stockUpdates.push(oemAdjustmentResult.updatedStock);
+        collectedComponents.push(
+          ...components.map((c) => ({
+            ...c,
+            typeComponentId: oemStock.typeComponentId,
+          }))
+        );
+
+        // 2. Perform IN adjustment to Service Center warehouse
+        // First, find or create stock in the target service center warehouse
+        let scStock =
+          await this.#warehouseRepository.findStockByWarehouseAndTypeComponent(
+            {
+              warehouseId: targetServiceCenterWarehouseId,
+              typeComponentId: oemStock.typeComponentId,
+            },
+            transaction
+          );
+
+        if (!scStock) {
+          scStock = await this.#warehouseRepository.createStock(
+            {
+              warehouseId: targetServiceCenterWarehouseId,
+              typeComponentId: oemStock.typeComponentId,
+              quantityInStock: 0, // Will be updated by adjustment
+              quantityReserved: 0,
+            },
+            transaction
+          );
+        }
+
+        // Use the internal #performAdjustment logic for IN to Service Center
+        const scAdjustmentResult =
+          await this.#inventoryService._performAdjustment({
+            // Accessing private method for reuse
+            stockId: scStock.stockId,
+            adjustmentType: "IN",
+            reason: `Received from Stock Transfer Request ${requestId}`,
+            note: `Received for request ${requestId}`,
+            components,
+            adjustedByUserId: dispatchedByUserId, // Assuming same user dispatches and "receives" for this automated step
+            roleName,
+            companyId,
+            transaction,
+          });
+        stockUpdates.push(scAdjustmentResult.updatedStock);
+      }
+
+      const updatedRequest =
+        await this.#stockTransferRequestRepository.updateStockTransferRequestStatus(
+          {
+            requestId,
+            status: "SHIPPED", // Or RECEIVED, depending on desired flow. SHIPPED implies it's on its way.
+            shippedAt: formatUTCtzHCM(dayjs()),
+          },
+          transaction
+        );
+
+      const requestWithDetails =
+        await this.#stockTransferRequestRepository.getStockTransferRequestById(
+          { id: requestId },
+          transaction
+        );
+
+      return {
+        updatedRequest,
+        stockUpdates,
+        collectedComponents,
+        requestWithDetails,
+      };
+    });
+
+    const { updatedRequest, stockUpdates = [], requestWithDetails } = rawResult;
+
+    // Notify the requesting service center
+    const roomNameServiceCenterStaff = `service_center_staff_${serviceCenterRequest}`;
+    const roomNameServiceCenterManager = `service_center_manager_${serviceCenterRequest}`;
+    const roomNamePartsCoordinatorServiceCenter = `parts_coordinator_service_center_${serviceCenterRequest}`;
+
+    const eventName = "stock_transfer_request_shipped"; // Or received, if status is RECEIVED
+    const data = { requestId, requestWithDetails };
+
+    this.#notificationService.sendToRooms(
+      [
+        roomNameServiceCenterStaff,
+        roomNameServiceCenterManager,
+        roomNamePartsCoordinatorServiceCenter,
+      ],
+      eventName,
+      data
+    );
+
+    const affectedStockIds = stockUpdates
+      .map((update) => update.stockId)
+      .filter(Boolean);
+
+    if (affectedStockIds.length > 0) {
+      await this.#inventoryService.emitLowStockAlerts({
+        stockIds: affectedStockIds,
+      });
+    }
+
+    return {
+      updatedRequest,
+      collectedComponents: rawResult.collectedComponents,
+    };
   };
 
   #collectComponentsFromReservations = async ({

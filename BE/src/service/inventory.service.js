@@ -180,7 +180,7 @@ class InventoryService {
     return results;
   };
 
-  async #performAdjustment({
+  #performAdjustment = async ({
     stockId,
     adjustmentType,
     reason,
@@ -190,7 +190,7 @@ class InventoryService {
     roleName,
     companyId,
     transaction,
-  }) {
+  }) => {
     const stock = await this.#warehouseRepository.findStockByStockId(
       stockId,
       transaction,
@@ -325,7 +325,7 @@ class InventoryService {
     }
 
     return result;
-  }
+  };
 
   createInventoryAdjustment = async (adjustmentData) => {
     const {
