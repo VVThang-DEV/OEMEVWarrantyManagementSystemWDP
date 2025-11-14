@@ -22,10 +22,9 @@ export function ComponentInstallModal({
   reservationId,
   componentName,
   vehicleVin: initialVin = "",
-  componentSerial: initialSerial = "",
+  componentSerial = "",
 }: ComponentInstallModalProps) {
   const [vehicleVin, setVehicleVin] = useState(initialVin);
-  const [serialNumber, setSerialNumber] = useState(initialSerial);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,10 +32,9 @@ export function ComponentInstallModal({
   useEffect(() => {
     if (isOpen) {
       setVehicleVin(initialVin);
-      setSerialNumber(initialSerial);
       setError(null);
     }
-  }, [isOpen, initialVin, initialSerial]);
+  }, [isOpen, initialVin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,8 +98,8 @@ export function ComponentInstallModal({
                 <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-700">
                   Installing this component will link it to the vehicle and mark
-                  it as INSTALLED. The case line status will remain IN_REPAIR
-                  until you mark the repair as complete.
+                  it as INSTALLED. The component serial number is automatically
+                  tracked from the reservation.
                 </p>
               </div>
 
@@ -144,30 +142,14 @@ export function ComponentInstallModal({
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Component Serial Number
-                  {serialNumber && (
-                    <span className="ml-2 text-xs text-green-600 font-normal">
-                      (Auto-filled)
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  value={serialNumber}
-                  onChange={(e) => setSerialNumber(e.target.value)}
-                  placeholder="Serial number (optional)"
-                  className={`w-full text-black px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                    serialNumber
-                      ? "bg-green-50 border-green-300"
-                      : "border-gray-300"
-                  }`}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Component serial number for tracking
-                </p>
-              </div>
+              {componentSerial && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-xs font-medium text-gray-700 mb-1">
+                    Component Serial Number
+                  </p>
+                  <p className="text-sm text-gray-900">{componentSerial}</p>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

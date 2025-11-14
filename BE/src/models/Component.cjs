@@ -31,6 +31,7 @@ module.exports = (sequelize, DataTypes) => {
       status: {
         type: DataTypes.ENUM(
           "IN_STOCK",
+          "IN_WAREHOUSE",
           "RESERVED",
           "IN_TRANSIT",
           "PICKED_UP",

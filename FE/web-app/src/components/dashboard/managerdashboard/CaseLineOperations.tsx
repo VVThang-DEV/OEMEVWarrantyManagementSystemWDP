@@ -211,10 +211,10 @@ export function CaseLineOperations() {
       // Check if we have warehouse data to validate stock availability
       try {
         const warehouseResponse = await warehouseService.getWarehouses();
-        const warehouses = warehouseResponse.data.warehouses || [];
+        const warehouses = warehouseResponse.warehouses || [];
 
         // Find if any warehouse has stock for this component
-        const hasStock = warehouses.some((warehouse: any) =>
+        const warehouseWithStock = warehouses.find((warehouse: any) =>
           warehouse.stocks?.some(
             (stock: any) =>
               stock.typeComponentId === caseLine.typeComponentId &&
@@ -222,7 +222,7 @@ export function CaseLineOperations() {
           )
         );
 
-        if (!hasStock) {
+        if (!warehouseWithStock) {
           setErrorMessage(
             `Cannot allocate stock: No warehouse has sufficient stock (${
               caseLine.quantity
@@ -231,6 +231,14 @@ export function CaseLineOperations() {
             }". Please create a stock transfer request from the company warehouse.`
           );
           return;
+        } else {
+          // Stock exists in Stock table, but we'll proceed to check if Component records exist
+          console.log(
+            `Stock available in ${warehouseWithStock.name}:`,
+            warehouseWithStock.stocks.find(
+              (s: any) => s.typeComponentId === caseLine.typeComponentId
+            )
+          );
         }
       } catch (warehouseError) {
         console.warn(
@@ -270,33 +278,53 @@ export function CaseLineOperations() {
         error.message ||
         "Failed to allocate stock";
 
-      let helpText = "";
+      // Get the case line for better error messages
+      const caseLine = caseLines.find(
+        (cl: any) => cl.id === caseLineId || cl.caseLineId === caseLineId
+      );
+
+      let userFriendlyMessage = errorMsg;
+
       if (error?.response?.status === 409) {
         if (
           errorMsg.includes("Available: 0") ||
           errorMsg.includes("Insufficient available components")
         ) {
-          helpText =
-            " → Stock appears available in inventory, but individual component records are missing from the database. This is a backend data seeding issue - the Component table needs to be populated with individual component items that match the stock quantities.";
+          // Extract component name if available
+          const componentName =
+            caseLine?.typeComponent?.name || "this component";
+
+          userFriendlyMessage =
+            `Database inconsistency detected: Stock shows available quantity, but individual component records are missing. This means:\n\n` +
+            `• Stock table shows quantity available for "${componentName}"\n` +
+            `• But Component table has no individual items with status "IN_WAREHOUSE"\n\n` +
+            `Solution: Contact system administrator to run the database seeder script to populate Component records that match Stock quantities.\n\n` +
+            `Technical details: ${errorMsg}`;
         } else if (errorMsg.includes("No component specified")) {
-          helpText =
-            " → This case line doesn't have a component type assigned.";
+          userFriendlyMessage =
+            "This case line doesn't have a component type assigned. Please update the case line first.";
         } else if (errorMsg.includes("already allocated")) {
-          helpText = " → Stock has already been allocated for this case line.";
-        } else {
-          helpText =
-            " → Possible issue: Component inventory data missing or insufficient stock.";
+          userFriendlyMessage =
+            "Stock has already been allocated for this case line.";
+        } else if (errorMsg.includes("No stock available")) {
+          userFriendlyMessage =
+            "Insufficient stock available. Please request a stock transfer from the company warehouse.";
         }
       }
 
-      setErrorMessage(`${errorMsg}${helpText}`);
+      setErrorMessage(userFriendlyMessage);
     }
   };
 
   const handleOpenTechnicianModal = (caseLineId: string) => {
+    const caseLine = caseLines.find(
+      (cl: any) => cl.id === caseLineId || cl.caseLineId === caseLineId
+    );
+
     setSelectedCaseLineForAssignment(caseLineId);
     setShowTechnicianModal(true);
-    setSelectedTechnician("");
+    // Pre-select current technician if already assigned
+    setSelectedTechnician(caseLine?.repairTechnician?.userId || "");
   };
 
   const handleAssignTechnician = async () => {
@@ -383,12 +411,13 @@ export function CaseLineOperations() {
       const errors: string[] = [];
 
       for (const caseLineId of Array.from(selectedCaseLineIds)) {
-        try {
-          const caseLine = caseLines.find(
-            (cl: any) => cl.id === caseLineId || cl.caseLineId === caseLineId
-          );
+        // Find case line for this iteration
+        const currentCaseLine = caseLines.find(
+          (cl: any) => cl.id === caseLineId || cl.caseLineId === caseLineId
+        );
 
-          if (!caseLine || !caseLine.guaranteeCaseId) {
+        try {
+          if (!currentCaseLine || !currentCaseLine.guaranteeCaseId) {
             errors.push(
               `${caseLineId.substring(0, 8)}...: Guarantee case not found`
             );
@@ -396,7 +425,10 @@ export function CaseLineOperations() {
             continue;
           }
 
-          if (!caseLine.typeComponentId && !caseLine.typeComponent) {
+          if (
+            !currentCaseLine.typeComponentId &&
+            !currentCaseLine.typeComponent
+          ) {
             errors.push(
               `${caseLineId.substring(0, 8)}...: No component specified`
             );
@@ -405,13 +437,28 @@ export function CaseLineOperations() {
           }
 
           await caseLineService.allocateStock(
-            caseLine.guaranteeCaseId,
+            currentCaseLine.guaranteeCaseId,
             caseLineId
           );
           successCount++;
         } catch (error: any) {
           failedCount++;
-          const errorMsg = error?.response?.data?.message || error.message;
+          let errorMsg = error?.response?.data?.message || error.message;
+
+          // Simplify error messages for bulk operations
+          if (error?.response?.status === 409) {
+            if (
+              errorMsg.includes("Available: 0") ||
+              errorMsg.includes("Insufficient available components")
+            ) {
+              errorMsg = `No stock available for ${
+                currentCaseLine?.typeComponent?.name || "component"
+              }`;
+            } else if (errorMsg.includes("already allocated")) {
+              errorMsg = "Already allocated";
+            }
+          }
+
           const shortId = caseLineId.substring(0, 8);
           errors.push(`${shortId}...: ${errorMsg}`);
         }
@@ -934,16 +981,27 @@ export function CaseLineOperations() {
                               onClick={() =>
                                 handleOpenTechnicianModal(caseLine.id)
                               }
-                              disabled={caseLine.status !== "READY_FOR_REPAIR"}
-                              className="flex-1 px-4 py-2.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                              disabled={
+                                caseLine.status !== "READY_FOR_REPAIR" ||
+                                !!caseLine.repairTechnician
+                              }
+                              className={`flex-1 px-4 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium ${
+                                caseLine.repairTechnician
+                                  ? "bg-green-600 text-white"
+                                  : "bg-gray-900 text-white hover:bg-gray-800"
+                              }`}
                               title={
-                                caseLine.status !== "READY_FOR_REPAIR"
+                                caseLine.repairTechnician
+                                  ? `Assigned to ${caseLine.repairTechnician.name}`
+                                  : caseLine.status !== "READY_FOR_REPAIR"
                                   ? "Stock must be allocated first"
                                   : "Assign technician"
                               }
                             >
                               <UserPlus className="w-4 h-4" />
-                              Assign Technician
+                              {caseLine.repairTechnician
+                                ? caseLine.repairTechnician.name
+                                : "Assign Technician"}
                             </button>
                           </div>
                         </div>

@@ -35,9 +35,44 @@ export interface ComponentReservation {
     status: string;
     vehicleVin?: string | null;
   };
+  pickedUpByTech?: {
+    userId: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  } | null;
   caseLine?: {
     id: string;
     status: string;
+    repairTechId?: string;
+    repairTechnician?: {
+      userId: string;
+      name: string;
+      email?: string;
+      phone?: string;
+    };
+    diagnosticTechId?: string;
+    diagnosticTechnician?: {
+      userId: string;
+      name: string;
+      email?: string;
+      phone?: string;
+    };
+    guaranteeCase?: {
+      guaranteeCaseId: string;
+      status: string;
+      vehicleProcessingRecordId?: string;
+      vehicleProcessingRecord?: {
+        vehicleProcessingRecordId: string;
+        vin: string;
+        createdByStaffId?: string;
+        createdByStaff?: {
+          userId: string;
+          serviceCenterId: string;
+          name: string;
+        };
+      };
+    };
   };
   warehouse?: {
     warehouseId: string;
