@@ -12,13 +12,21 @@ import {
   CheckCircle2,
   AlertCircle,
   Filter,
+  Calendar,
+  Clock,
+  Car,
+  Wrench,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { WorkflowTimeline } from "@/components/shared/WorkflowTimeline";
 
 export default function TaskAssignmentList() {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskAssignment[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
   const [pagination, setPagination] = useState({
     total: 0,
@@ -28,17 +36,16 @@ export default function TaskAssignmentList() {
   });
 
   useEffect(() => {
-    loadTasks(1, statusFilter);
-  }, [statusFilter]);
+    loadTasks(1);
+  }, []);
 
-  const loadTasks = async (page: number, status?: string) => {
+  const loadTasks = async (page: number) => {
     try {
       setLoading(true);
 
       const result = await taskAssignmentService.getTaskAssignments({
         page,
         limit: 20,
-        status: status || undefined,
       });
 
       setTasks(result.tasks || []);
@@ -71,24 +78,150 @@ export default function TaskAssignmentList() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, { bg: string; text: string }> = {
-      PENDING: { bg: "bg-yellow-100", text: "text-yellow-700" },
-      IN_PROGRESS: { bg: "bg-blue-100", text: "text-blue-700" },
-      COMPLETED: { bg: "bg-green-100", text: "text-green-700" },
-      CANCELLED: { bg: "bg-red-100", text: "text-red-700" },
+  const getTimelineEvents = (task: TaskAssignment) => {
+    const events = [
+      {
+        status: "ASSIGNED",
+        timestamp: task.assignedAt,
+        label: "Task Assigned",
+        user: task.technician
+          ? { userId: task.technician.userId, name: task.technician.name }
+          : null,
+        description: `${
+          task.taskType === "DIAGNOSIS" ? "Diagnosis" : "Repair"
+        } task assigned to technician`,
+      },
+    ];
+
+    // Add processing record status if available
+    if (task.vehicleProcessingRecord) {
+      events.push({
+        status: "PROCESSING",
+        timestamp:
+          task.vehicleProcessingRecord.status === "PROCESSING"
+            ? (task.assignedAt as string)
+            : null,
+        label: "Vehicle Processing",
+        user: null,
+        description: `Status: ${task.vehicleProcessingRecord.status?.replace(
+          /_/g,
+          " "
+        )}`,
+      });
+    }
+
+    // Add case line events if available
+    if (task.caseLine) {
+      if (task.caseLine.diagnosisText) {
+        events.push({
+          status: "DIAGNOSED",
+          timestamp: task.caseLine.status ? (task.createdAt as string) : null,
+          label: "Diagnosis Complete",
+          user: task.technician
+            ? { userId: task.technician.userId, name: task.technician.name }
+            : null,
+          description: task.caseLine.diagnosisText?.substring(0, 50) + "...",
+        });
+      }
+
+      if (
+        task.caseLine.status === "CUSTOMER_APPROVED" ||
+        task.caseLine.status === "COMPLETED"
+      ) {
+        events.push({
+          status: "APPROVED",
+          timestamp:
+            task.caseLine.status === "CUSTOMER_APPROVED"
+              ? (task.updatedAt as string)
+              : null,
+          label: "Customer Approved",
+          user: null,
+          description: "Customer approved the repair work",
+        });
+      }
+
+      if (task.caseLine.correctionText) {
+        events.push({
+          status: "REPAIRED",
+          timestamp:
+            task.caseLine.status === "COMPLETED"
+              ? (task.updatedAt as string)
+              : null,
+          label: "Repair Complete",
+          user: task.technician
+            ? { userId: task.technician.userId, name: task.technician.name }
+            : null,
+          description: task.caseLine.correctionText?.substring(0, 50) + "...",
+        });
+      }
+    }
+
+    // Add completion event
+    events.push({
+      status: "COMPLETED",
+      timestamp: task.completedAt || null,
+      label: "Task Completed",
+      user:
+        task.completedAt && task.technician
+          ? { userId: task.technician.userId, name: task.technician.name }
+          : null,
+      description: task.completedAt
+        ? "Task successfully completed"
+        : "Awaiting completion",
+    });
+
+    return events;
+  };
+
+  const getTaskStatus = (task: TaskAssignment): string => {
+    if (task.completedAt) return "COMPLETED";
+    if (task.isActive) return "IN_PROGRESS";
+    return "PENDING";
+  };
+
+  const getFilteredTasks = () => {
+    if (!statusFilter) return tasks;
+    return tasks.filter((task) => getTaskStatus(task) === statusFilter);
+  };
+
+  const getStatusBadge = (task: TaskAssignment) => {
+    let status = "PENDING";
+    let label = "Pending";
+
+    if (task.completedAt) {
+      status = "COMPLETED";
+      label = "Completed";
+    } else if (task.isActive) {
+      status = "IN_PROGRESS";
+      label = "In Progress";
+    }
+
+    const styles: Record<
+      string,
+      { bg: string; text: string; icon: React.ElementType }
+    > = {
+      PENDING: { bg: "bg-yellow-100", text: "text-yellow-700", icon: Clock },
+      IN_PROGRESS: {
+        bg: "bg-blue-100",
+        text: "text-blue-700",
+        icon: AlertCircle,
+      },
+      COMPLETED: {
+        bg: "bg-green-100",
+        text: "text-green-700",
+        icon: CheckCircle2,
+      },
     };
 
-    const style = styles[status] || {
-      bg: "bg-gray-100",
-      text: "text-gray-700",
-    };
+    const style = styles[status];
+    const Icon = style.icon;
 
     return (
       <span
-        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
       >
-        {status.replace("_", " ")}
+        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+        {label}
       </span>
     );
   };
@@ -154,7 +287,7 @@ export default function TaskAssignmentList() {
                 <button
                   onClick={() => {
                     setError(null);
-                    loadTasks(1, statusFilter);
+                    loadTasks(1);
                   }}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
@@ -166,7 +299,7 @@ export default function TaskAssignmentList() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
             </div>
-          ) : tasks.length === 0 ? (
+          ) : getFilteredTasks().length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="text-lg font-medium">No task assignments found</p>
@@ -179,7 +312,7 @@ export default function TaskAssignmentList() {
           ) : (
             <>
               <div className="divide-y divide-gray-200">
-                {tasks.map((task, index) => (
+                {getFilteredTasks().map((task, index) => (
                   <motion.div
                     key={task.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -187,71 +320,229 @@ export default function TaskAssignmentList() {
                     transition={{ delay: index * 0.05 }}
                     className="p-6 hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        {/* Status and Completion */}
-                        <div className="flex items-center gap-3 mb-4">
-                          {getStatusBadge(task.status)}
-                          {task.completedAt && (
-                            <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-md">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Completed
-                            </span>
+                    <div className="flex gap-6">
+                      {/* Timeline Column */}
+                      <div className="flex flex-col items-center">
+                        <div
+                          className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                            task.taskType === "DIAGNOSIS"
+                              ? "bg-blue-100 text-blue-600"
+                              : "bg-purple-100 text-purple-600"
+                          }`}
+                        >
+                          {task.taskType === "DIAGNOSIS" ? (
+                            <ClipboardList className="w-6 h-6" />
+                          ) : (
+                            <Wrench className="w-6 h-6" />
                           )}
                         </div>
+                        {index < tasks.length - 1 && (
+                          <div className="w-0.5 flex-1 bg-gray-200 mt-2" />
+                        )}
+                      </div>
 
-                        <div className="grid grid-cols-3 gap-4 mb-4">
-                          {/* Technician Info */}
+                      {/* Content Column */}
+                      <div className="flex-1">
+                        {/* Header: Task Type, Status, VIN */}
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-lg font-semibold text-gray-900">
+                                {task.taskType?.replace(/_/g, " ") || "Task"}
+                              </h3>
+                              {getStatusBadge(task)}
+                            </div>
+                            {task.vehicleProcessingRecord?.vehicle?.vin && (
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <Car className="w-4 h-4" />
+                                <span className="font-mono font-medium">
+                                  {task.vehicleProcessingRecord.vehicle.vin}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() =>
+                              setExpandedTaskId(
+                                expandedTaskId === task.id ? null : task.id
+                              )
+                            }
+                            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            {expandedTaskId === task.id ? (
+                              <>
+                                <ChevronUp className="w-4 h-4" />
+                                Hide Details
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4" />
+                                View Timeline
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Timeline Information */}
+                        <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                          {/* Technician */}
                           {task.technician && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">
+                              <p className="text-xs font-medium text-gray-500 mb-1.5 flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5" />
                                 Assigned Technician
                               </p>
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 text-gray-400" />
-                                <div>
-                                  <p className="font-medium text-gray-900">
-                                    {task.technician.name}
-                                  </p>
-                                  {task.technician.phone && (
-                                    <p className="text-xs text-gray-500">
-                                      {task.technician.phone}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
+                              <p className="font-medium text-gray-900">
+                                {task.technician.name}
+                              </p>
+                              {task.technician.phone && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {task.technician.phone}
+                                </p>
+                              )}
                             </div>
                           )}
 
                           {/* Assigned Date */}
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">
+                            <p className="text-xs font-medium text-gray-500 mb-1.5 flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5" />
                               Assigned At
                             </p>
                             <p className="text-sm text-gray-900">
-                              {new Date(task.assignedAt).toLocaleString()}
+                              {new Date(task.assignedAt).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                }
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {new Date(task.assignedAt).toLocaleTimeString(
+                                "en-US",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
                             </p>
                           </div>
 
-                          {/* Completed Date */}
-                          {task.completedAt && (
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">
-                                Completed At
-                              </p>
+                          {/* Duration or Completion */}
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 mb-1.5 flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5" />
+                              {task.completedAt ? "Completed At" : "Duration"}
+                            </p>
+                            {task.completedAt ? (
+                              <>
+                                <p className="text-sm text-gray-900">
+                                  {new Date(
+                                    task.completedAt
+                                  ).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {new Date(
+                                    task.completedAt
+                                  ).toLocaleTimeString("en-US", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              </>
+                            ) : (
                               <p className="text-sm text-gray-900">
-                                {new Date(task.completedAt).toLocaleString()}
+                                {Math.floor(
+                                  (Date.now() -
+                                    new Date(task.assignedAt).getTime()) /
+                                    (1000 * 60 * 60)
+                                )}
+                                h{" "}
+                                {Math.floor(
+                                  ((Date.now() -
+                                    new Date(task.assignedAt).getTime()) %
+                                    (1000 * 60 * 60)) /
+                                    (1000 * 60)
+                                )}
+                                m
                               </p>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
+
+                        {/* Workflow Timeline - Expandable */}
+                        {expandedTaskId === task.id && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mb-4 p-5 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 rounded-xl border border-blue-200 shadow-sm"
+                          >
+                            <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-blue-600" />
+                              Workflow Timeline
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <WorkflowTimeline
+                                events={getTimelineEvents(task)}
+                                currentStatus={
+                                  task.completedAt
+                                    ? "COMPLETED"
+                                    : task.isActive
+                                    ? "IN_PROGRESS"
+                                    : "PENDING"
+                                }
+                                variant="horizontal"
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Processing Record Status */}
+                        {task.vehicleProcessingRecord && (
+                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-blue-700 mb-1">
+                                  Processing Record Status
+                                </p>
+                                <p className="text-sm font-semibold text-blue-900">
+                                  {task.vehicleProcessingRecord.status?.replace(
+                                    /_/g,
+                                    " "
+                                  )}
+                                </p>
+                              </div>
+                              {task.vehicleProcessingRecord
+                                .createdByStaffId && (
+                                <p className="text-xs text-blue-600">
+                                  ID:{" "}
+                                  {task.vehicleProcessingRecord.vehicleProcessingRecordId?.substring(
+                                    0,
+                                    8
+                                  )}
+                                  ...
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Case Line Details */}
                         {task.caseLine && (
                           <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <p className="text-xs font-semibold text-purple-700 mb-3">
+                              Case Line Details
+                            </p>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <p className="text-xs font-medium text-purple-700 mb-1">
+                                <p className="text-xs font-medium text-purple-600 mb-1">
                                   Diagnosis
                                 </p>
                                 <p className="text-sm text-purple-900">
@@ -262,7 +553,7 @@ export default function TaskAssignmentList() {
 
                               {task.caseLine.correctionText && (
                                 <div>
-                                  <p className="text-xs font-medium text-purple-700 mb-1">
+                                  <p className="text-xs font-medium text-purple-600 mb-1">
                                     Correction
                                   </p>
                                   <p className="text-sm text-purple-900">
@@ -271,41 +562,17 @@ export default function TaskAssignmentList() {
                                 </div>
                               )}
 
-                              {task.caseLine.guaranteeCase
-                                ?.vehicleProcessingRecord && (
-                                <div>
-                                  <p className="text-xs font-medium text-purple-700 mb-1">
-                                    Vehicle
-                                  </p>
-                                  <p className="text-sm text-purple-900 font-mono">
-                                    VIN:{" "}
-                                    {
-                                      task.caseLine.guaranteeCase
-                                        .vehicleProcessingRecord.vin
-                                    }
-                                  </p>
-                                  {task.caseLine.guaranteeCase
-                                    .vehicleProcessingRecord.customerName && (
-                                    <p className="text-xs text-purple-700">
-                                      Customer:{" "}
-                                      {
-                                        task.caseLine.guaranteeCase
-                                          .vehicleProcessingRecord.customerName
-                                      }
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-
                               <div>
-                                <p className="text-xs font-medium text-purple-700 mb-1">
-                                  Case Line Status
+                                <p className="text-xs font-medium text-purple-600 mb-1">
+                                  Status
                                 </p>
-                                <p className="text-sm text-purple-900">
-                                  {task.caseLine.status}
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm text-purple-900">
+                                    {task.caseLine.status?.replace(/_/g, " ")}
+                                  </p>
                                   {task.caseLine.warrantyStatus && (
                                     <span
-                                      className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                                      className={`px-2 py-0.5 rounded text-xs font-medium ${
                                         task.caseLine.warrantyStatus ===
                                         "ELIGIBLE"
                                           ? "bg-green-100 text-green-700"
@@ -315,7 +582,7 @@ export default function TaskAssignmentList() {
                                       {task.caseLine.warrantyStatus}
                                     </span>
                                   )}
-                                </p>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -335,18 +602,14 @@ export default function TaskAssignmentList() {
                   </p>
                   <div className="flex gap-2">
                     <button
-                      onClick={() =>
-                        loadTasks(pagination.page - 1, statusFilter)
-                      }
+                      onClick={() => loadTasks(pagination.page - 1)}
                       disabled={pagination.page === 1}
                       className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() =>
-                        loadTasks(pagination.page + 1, statusFilter)
-                      }
+                      onClick={() => loadTasks(pagination.page + 1)}
                       disabled={pagination.page === pagination.totalPages}
                       className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
