@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import recallService, { RecallCampaign } from "@/services/recallService";
+import toast from "react-hot-toast";
 import {
   Loader2,
   Plus,
@@ -94,7 +95,7 @@ export function CreateRecallModal({
   const submit = async () => {
     const error = validate();
     if (error) {
-      alert(error);
+      toast.error(error);
       return;
     }
 
@@ -113,13 +114,13 @@ export function CreateRecallModal({
         affectedVehicleModelIds,
       });
 
-      alert("Recall campaign created successfully!");
+      toast.success("Recall campaign created successfully!");
       onSuccess();
       onClose();
     } catch (err) {
       console.error("Error creating recall campaign:", err);
       const error = err as { response?: { data?: { message?: string } } };
-      alert(
+      toast.error(
         error.response?.data?.message || "Failed to create recall campaign"
       );
     } finally {
@@ -243,6 +244,65 @@ export function CreateRecallModal({
   );
 }
 
+// Confirmation Modal Component
+interface ConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  isLoading?: boolean;
+}
+
+function ConfirmationModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  isLoading = false,
+}: ConfirmationModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
+          <p className="text-gray-600">{message}</p>
+        </div>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              confirmText
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RecallCampaignList() {
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<RecallCampaign[]>([]);
@@ -250,6 +310,11 @@ export default function RecallCampaignList() {
     useState<RecallCampaign | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showConfirmActivate, setShowConfirmActivate] = useState(false);
+  const [campaignToActivate, setCampaignToActivate] = useState<string | null>(
+    null
+  );
+  const [activating, setActivating] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(
     undefined
   );
@@ -302,27 +367,33 @@ export default function RecallCampaignList() {
       setShowDetail(true);
     } catch (err) {
       console.error("Error fetching campaign detail:", err);
-      alert("Failed to load campaign details");
+      toast.error("Failed to load campaign details");
     }
   };
 
-  const handleActivate = async (campaignId: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to activate this campaign? This will change status from DRAFT to ACTIVE."
-      )
-    ) {
-      return;
-    }
+  const handleActivate = (campaignId: string) => {
+    setCampaignToActivate(campaignId);
+    setShowConfirmActivate(true);
+  };
+
+  const confirmActivate = async () => {
+    if (!campaignToActivate) return;
 
     try {
-      await recallService.activateRecallCampaign(campaignId);
-      alert("Campaign activated successfully!");
+      setActivating(true);
+      await recallService.activateRecallCampaign(campaignToActivate);
+      toast.success("Campaign activated successfully!");
+      setShowConfirmActivate(false);
+      setCampaignToActivate(null);
       loadCampaigns(pagination.page);
     } catch (err) {
       console.error("Error activating campaign:", err);
       const error = err as { response?: { data?: { message?: string } } };
-      alert(error.response?.data?.message || "Failed to activate campaign");
+      toast.error(
+        error.response?.data?.message || "Failed to activate campaign"
+      );
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -592,6 +663,20 @@ export default function RecallCampaignList() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => loadCampaigns(1)}
+      />
+
+      {/* CONFIRMATION MODAL */}
+      <ConfirmationModal
+        isOpen={showConfirmActivate}
+        onClose={() => {
+          setShowConfirmActivate(false);
+          setCampaignToActivate(null);
+        }}
+        onConfirm={confirmActivate}
+        title="Activate Recall Campaign"
+        message="Are you sure you want to activate this campaign? This will change status from DRAFT to ACTIVE and notify affected customers."
+        confirmText="Activate"
+        isLoading={activating}
       />
     </div>
   );
