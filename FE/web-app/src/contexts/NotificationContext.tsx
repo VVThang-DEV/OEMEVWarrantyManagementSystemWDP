@@ -287,18 +287,26 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // Mark notification as read
   const markAsRead = useCallback((notificationId: string) => {
+    console.log("🔄 markAsRead called for:", notificationId);
+
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
 
     // Sync with backend (ignore 404 if already read)
-    markNotificationAsReadAPI(notificationId).catch((error) => {
-      const axiosError = error as { response?: { status?: number } };
-      if (axiosError.response?.status !== 404) {
-        console.error("❌ Failed to mark notification as read:", error);
-      }
-      // 404 means already read or not found - UI already updated, ignore
-    });
+    markNotificationAsReadAPI(notificationId)
+      .then(() => {
+        console.log("✅ Backend confirmed mark as read:", notificationId);
+      })
+      .catch((error) => {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status !== 404) {
+          console.error("❌ Failed to mark notification as read:", error);
+        } else {
+          console.log("ℹ️ 404 response (already read or not found)");
+        }
+        // 404 means already read or not found - UI already updated, ignore
+      });
   }, []);
 
   // Mark all notifications as read

@@ -425,9 +425,22 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                             const pendingApproval = caseLines.filter(
                               (cl) => cl.status === "PENDING_APPROVAL"
                             ).length;
+                            const waitingForParts = caseLines.filter(
+                              (cl) => cl.status === "WAITING_FOR_PARTS"
+                            ).length;
+                            const readyForRepair = caseLines.filter(
+                              (cl) => cl.status === "READY_FOR_REPAIR"
+                            ).length;
+                            const inRepair = caseLines.filter(
+                              (cl) => cl.status === "IN_REPAIR"
+                            ).length;
+                            const completed = caseLines.filter(
+                              (cl) => cl.status === "COMPLETED"
+                            ).length;
                             const approved = caseLines.filter(
                               (cl) =>
                                 cl.status === "CUSTOMER_APPROVED" ||
+                                cl.status === "WAITING_FOR_PARTS" ||
                                 cl.status === "READY_FOR_REPAIR" ||
                                 cl.status === "IN_REPAIR" ||
                                 cl.status === "COMPLETED"
@@ -451,6 +464,50 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                               statusBadge = (
                                 <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 rounded text-xs font-semibold">
                                   {pendingApproval} Pending Approval
+                                </span>
+                              );
+                            } else if (waitingForParts === totalLines) {
+                              buttonText = `View ${totalLines} Case Line${
+                                totalLines !== 1 ? "s" : ""
+                              }`;
+                              buttonStyle =
+                                "bg-orange-600 text-white hover:bg-orange-700";
+                              statusBadge = (
+                                <span className="px-2 py-0.5 bg-orange-200 text-orange-800 rounded text-xs font-semibold">
+                                  Waiting for Parts
+                                </span>
+                              );
+                            } else if (readyForRepair === totalLines) {
+                              buttonText = `View ${totalLines} Case Line${
+                                totalLines !== 1 ? "s" : ""
+                              }`;
+                              buttonStyle =
+                                "bg-blue-600 text-white hover:bg-blue-700";
+                              statusBadge = (
+                                <span className="px-2 py-0.5 bg-blue-200 text-blue-800 rounded text-xs font-semibold">
+                                  Ready for Repair
+                                </span>
+                              );
+                            } else if (inRepair === totalLines) {
+                              buttonText = `View ${totalLines} Case Line${
+                                totalLines !== 1 ? "s" : ""
+                              }`;
+                              buttonStyle =
+                                "bg-purple-600 text-white hover:bg-purple-700";
+                              statusBadge = (
+                                <span className="px-2 py-0.5 bg-purple-200 text-purple-800 rounded text-xs font-semibold">
+                                  In Repair
+                                </span>
+                              );
+                            } else if (completed === totalLines) {
+                              buttonText = `View ${totalLines} Case Line${
+                                totalLines !== 1 ? "s" : ""
+                              }`;
+                              buttonStyle =
+                                "bg-green-600 text-white hover:bg-green-700";
+                              statusBadge = (
+                                <span className="px-2 py-0.5 bg-green-200 text-green-800 rounded text-xs font-semibold">
+                                  Completed
                                 </span>
                               );
                             } else if (approved === totalLines) {
