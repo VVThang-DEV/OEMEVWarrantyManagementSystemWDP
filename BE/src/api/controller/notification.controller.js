@@ -6,13 +6,19 @@ class NotificationController {
   getNotifications = async (req, res, next) => {
     try {
       const { user } = req;
+
       const { page = 1, limit = 10 } = req.query;
+
       const parsedPage = Number.parseInt(page, 10);
+
       const parsedLimit = Number.parseInt(limit, 10);
+
       const safePage =
         Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+
       const safeLimit =
         Number.isNaN(parsedLimit) || parsedLimit < 1 ? 10 : parsedLimit;
+
       const notifications =
         await this.notificationService.getNotificationsForUser({
           user,

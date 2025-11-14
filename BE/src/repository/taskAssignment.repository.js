@@ -138,7 +138,7 @@ class TaskAssignmentRepository {
             "status",
             "createdByStaffId",
           ],
-          required: false, // Use left join
+          required: false,
           include: [
             {
               model: Vehicle,
