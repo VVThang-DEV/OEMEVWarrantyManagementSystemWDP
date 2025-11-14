@@ -42,7 +42,8 @@ jobs:
             cd ~/myapp/backend
 
             echo "=== Writing .env from GitHub secret BACKEND_ENV ==="
-            printf '%s\n' "$BACKEND_ENV" > .env
+            printf '%s\n' "$BACKEND_ENV" | sudo tee .env > /dev/null
+
             echo "=== .env preview (first lines) ==="
             head -n 5 .env || true
             
