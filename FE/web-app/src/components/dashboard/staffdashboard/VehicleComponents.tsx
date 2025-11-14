@@ -7,7 +7,6 @@ import {
   Package,
   Calendar,
   CheckCircle,
-  XCircle,
   RefreshCw,
   Loader2,
   AlertCircle,
@@ -52,12 +51,6 @@ const statusConfig: Record<
     bgColor: "bg-green-100",
     icon: CheckCircle,
   },
-  RETURNED: {
-    label: "Returned",
-    color: "text-red-700",
-    bgColor: "bg-red-100",
-    icon: XCircle,
-  },
 };
 
 const categoryColors: Record<string, string> = {
@@ -80,7 +73,6 @@ export function VehicleComponents() {
     | "IN_TRANSIT"
     | "WITH_TECHNICIAN"
     | "INSTALLED"
-    | "RETURNED"
   >("ALL");
 
   const handleSearch = async () => {
@@ -96,8 +88,8 @@ export function VehicleComponents() {
         statusFilter
       );
       if (response.status === "success") {
-        setComponents(response.data.components);
-        toast.success(`Found ${response.data.components.length} components`);
+        setComponents(response.data);
+        toast.success(`Found ${response.data.length} components`);
       }
     } catch (error: unknown) {
       console.error("Error fetching components:", error);
@@ -156,7 +148,6 @@ export function VehicleComponents() {
                     | "IN_TRANSIT"
                     | "WITH_TECHNICIAN"
                     | "INSTALLED"
-                    | "RETURNED"
                 )
               }
               className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
@@ -167,7 +158,6 @@ export function VehicleComponents() {
               <option value="IN_TRANSIT">In Transit</option>
               <option value="WITH_TECHNICIAN">With Technician</option>
               <option value="INSTALLED">Installed</option>
-              <option value="RETURNED">Returned</option>
             </select>
             <button
               onClick={handleSearch}
@@ -313,25 +303,6 @@ export function VehicleComponents() {
                     </p>
                   </div>
                   <CheckCircle className="w-8 h-8 text-green-600 opacity-60" />
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.35 }}
-                className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-red-600 uppercase tracking-wide">
-                      Returned
-                    </p>
-                    <p className="text-2xl font-bold text-red-900 mt-1">
-                      {components.filter((c) => c.status === "RETURNED").length}
-                    </p>
-                  </div>
-                  <XCircle className="w-8 h-8 text-red-600 opacity-60" />
                 </div>
               </motion.div>
             </div>

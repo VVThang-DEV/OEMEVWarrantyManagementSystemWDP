@@ -41,14 +41,12 @@ export default function ComponentReservationQueue() {
         (statusFilter === "RESERVED" ||
           statusFilter === "PICKED_UP" ||
           statusFilter === "INSTALLED" ||
-          statusFilter === "RETURNED" ||
           statusFilter === "CANCELLED")
       ) {
         params.status = statusFilter as
           | "RESERVED"
           | "PICKED_UP"
           | "INSTALLED"
-          | "RETURNED"
           | "CANCELLED";
       }
 
@@ -68,7 +66,7 @@ export default function ComponentReservationQueue() {
       return result.data.reservations;
     },
     {
-      interval: 30000, // Poll every 30 seconds
+      interval: 120000, // Poll every 2 minutes
       enabled: !loading,
       onError: (err) => {
         console.error("❌ Reservation polling error:", err);
@@ -94,14 +92,12 @@ export default function ComponentReservationQueue() {
         (status === "RESERVED" ||
           status === "PICKED_UP" ||
           status === "INSTALLED" ||
-          status === "RETURNED" ||
           status === "CANCELLED")
       ) {
         params.status = status as
           | "RESERVED"
           | "PICKED_UP"
           | "INSTALLED"
-          | "RETURNED"
           | "CANCELLED";
       }
 
@@ -145,7 +141,6 @@ export default function ComponentReservationQueue() {
       RESERVED: "bg-blue-100 text-blue-700",
       PICKED_UP: "bg-yellow-100 text-yellow-700",
       INSTALLED: "bg-green-100 text-green-700",
-      RETURNED: "bg-purple-100 text-purple-700",
       CANCELLED: "bg-red-100 text-red-700",
     };
 
@@ -203,7 +198,6 @@ export default function ComponentReservationQueue() {
                   <option value="RESERVED">Reserved</option>
                   <option value="PICKED_UP">Picked Up</option>
                   <option value="INSTALLED">Installed</option>
-                  <option value="RETURNED">Returned</option>
                   <option value="CANCELLED">Cancelled</option>
                 </select>
               </div>
@@ -322,8 +316,6 @@ export default function ComponentReservationQueue() {
                             {reservation.oldComponentSerial && (
                               <p className="text-xs text-green-700 mt-1">
                                 Replaced: {reservation.oldComponentSerial}
-                                {reservation.oldComponentReturned &&
-                                  " (Returned)"}
                               </p>
                             )}
                           </div>

@@ -53,7 +53,14 @@ class UserRepository {
       whereCondition.status = status;
     }
 
-    const userCondition = {};
+    // Get the technician role - Fixed SQL subquery approach (2025-11-14)
+    const technicianRole = await Role.findOne({
+      where: { roleName: "service_center_technician" },
+    });
+
+    const userCondition = {
+      roleId: technicianRole?.roleId,
+    };
 
     if (serviceCenterId) {
       userCondition.serviceCenterId = serviceCenterId;
@@ -64,11 +71,14 @@ class UserRepository {
       attributes: [
         "userId",
         "name",
+        "employeeCode",
         [
-          db.sequelize.fn(
-            "COUNT",
-            db.sequelize.col("tasks.task_assignment_id")
-          ),
+          db.sequelize.literal(`(
+            SELECT COUNT(*)
+            FROM task_assignment
+            WHERE task_assignment.technician_id = User.user_id
+            AND task_assignment.is_active = true
+          )`),
           "activeTaskCount",
         ],
       ],
@@ -79,13 +89,7 @@ class UserRepository {
           as: "workSchedule",
           where: whereCondition,
           attributes: ["workDate", "status"],
-        },
-        {
-          model: TaskAssignment,
-          as: "tasks",
-          where: { isActive: true },
           required: false,
-          attributes: [],
         },
       ],
 

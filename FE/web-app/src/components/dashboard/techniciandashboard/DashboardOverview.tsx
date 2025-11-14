@@ -41,7 +41,7 @@ export function DashboardOverview() {
       return allRecords;
     },
     {
-      interval: 30000, // Poll every 30 seconds
+      interval: 120000, // Poll every 2 minutes
       enabled: !isLoading && !selectedCase, // Only poll when not loading and no modal open
       onError: (err) => {
         console.error("❌ Polling error:", err);

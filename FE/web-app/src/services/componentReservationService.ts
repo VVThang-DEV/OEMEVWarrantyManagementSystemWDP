@@ -20,12 +20,11 @@ export interface ComponentReservation {
   warehouseId: string;
   componentId: string;
   quantityReserved: number;
-  status: "RESERVED" | "PICKED_UP" | "INSTALLED" | "RETURNED";
+  status: "RESERVED" | "PICKED_UP" | "INSTALLED";
   pickedUpBy?: string | null;
   pickedUpAt?: string | null;
   installedAt?: string | null;
   oldComponentSerial?: string | null;
-  oldComponentReturned?: boolean;
   returnedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -79,7 +78,7 @@ export interface InstallComponentResponse {
 export interface GetComponentReservationsParams {
   page?: number;
   limit?: number;
-  status?: "RESERVED" | "PICKED_UP" | "INSTALLED" | "RETURNED" | "CANCELLED";
+  status?: "RESERVED" | "PICKED_UP" | "INSTALLED" | "CANCELLED";
   warehouseId?: string;
   typeComponentId?: string;
   caseLineId?: string;

@@ -8,8 +8,7 @@ export interface Component {
     | "RESERVED"
     | "IN_TRANSIT"
     | "WITH_TECHNICIAN"
-    | "INSTALLED"
-    | "RETURNED";
+    | "INSTALLED";
   typeComponentId: string;
   warehouseId: string;
   createdAt: string;
@@ -33,8 +32,7 @@ export interface UpdateComponentStatusRequest {
     | "RESERVED"
     | "IN_TRANSIT"
     | "WITH_TECHNICIAN"
-    | "INSTALLED"
-    | "RETURNED";
+    | "INSTALLED";
   notes?: string;
 }
 

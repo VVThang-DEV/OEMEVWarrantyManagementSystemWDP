@@ -19,6 +19,8 @@ import {
   getConversationMessages,
   getOrCreateGuestId,
   saveGuestConversationId,
+  saveGuestChatSession,
+  getSavedGuestChatSession,
   clearGuestChatSession,
   resumeByEmail,
   Message,
@@ -47,9 +49,8 @@ export default function GuestChatWidget({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
-  const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  const [useEmail, setUseEmail] = useState(false);
+  // Email is now optional - removed useEmail state
   const [resumeMode, setResumeMode] = useState(false);
   const [pastConversations, setPastConversations] = useState<Conversation[]>(
     []
@@ -66,14 +67,60 @@ export default function GuestChatWidget({
 
   const guestId = getOrCreateGuestId();
 
+  // Restore previous session on mount
+  useEffect(() => {
+    const savedSession = getSavedGuestChatSession();
+
+    // Check if session exists and is not too old (24 hours)
+    if (savedSession.conversationId && savedSession.timestamp) {
+      const hoursSinceLastSession =
+        (Date.now() - savedSession.timestamp) / (1000 * 60 * 60);
+
+      if (hoursSinceLastSession < 24) {
+        console.log("🔄 Restoring previous chat session:", savedSession);
+        setConversationId(savedSession.conversationId);
+
+        if (savedSession.email) {
+          setGuestEmail(savedSession.email);
+        }
+
+        // Only restore active conversations, not waiting ones
+        if (savedSession.status === "active") {
+          setConnectionStatus("active");
+          setIsOpen(true);
+        } else if (savedSession.status === "waiting") {
+          // For waiting status, just restore the conversation ID
+          // Don't auto-reconnect until user opens the widget
+          setConnectionStatus("waiting");
+        }
+      } else {
+        // Session expired, clear it
+        console.log("⏰ Previous session expired, clearing...");
+        clearGuestChatSession();
+      }
+    }
+  }, []);
+
   // Ensure component is mounted before rendering portal
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (isOpen && !isConnected) {
-      // Socket initialization moved to handleStartChat
+    // Only restore connection if:
+    // 1. Widget is opened
+    // 2. Not already connected
+    // 3. Has a valid conversationId
+    // 4. Connection status is active (not waiting)
+    if (
+      isOpen &&
+      !isConnected &&
+      conversationId &&
+      connectionStatus === "active"
+    ) {
+      // If widget opens and we have a saved active conversation, reconnect
+      console.log("🔄 Reconnecting to existing conversation:", conversationId);
+      restoreConnection();
     }
 
     return () => {
@@ -130,18 +177,101 @@ export default function GuestChatWidget({
     }
   };
 
+  const restoreConnection = async () => {
+    if (!conversationId) {
+      console.error(
+        "❌ Cannot restore connection: conversationId is undefined"
+      );
+      return;
+    }
+
+    if (connectionStatus !== "active") {
+      console.log("ℹ️ Skipping restoration: conversation is not active");
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      console.log(
+        `🔄 Restoring connection for conversation: ${conversationId}`
+      );
+
+      // Initialize socket connection
+      await initializeSocket();
+
+      // Load existing messages
+      await loadMessages();
+
+      // Set up socket listeners for restored session
+      const { getChatSocket, joinChatRoom } = await getSocketFunctions();
+      const socket = getChatSocket();
+
+      if (socket) {
+        console.log("[Guest] Setting up socket listeners for restored session");
+
+        // Clean up any existing listeners
+        socket.off("newMessage");
+        socket.off("userTyping");
+        socket.off("chatAccepted");
+        socket.off("conversationClosed");
+
+        // Listen for new messages
+        socket.on("newMessage", (data: { newMessage: Message }) => {
+          const normalizedMessage = {
+            ...data.newMessage,
+            senderType: data.newMessage.senderType.toLowerCase() as
+              | "guest"
+              | "staff",
+          };
+          setMessages((prev) => [...prev, normalizedMessage]);
+          setIsTyping(false);
+        });
+
+        // Listen for typing indicator
+        socket.on("userTyping", () => {
+          setIsTyping(true);
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+          }
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsTyping(false);
+          }, 3000);
+        });
+
+        // Listen for conversation closed
+        socket.on(
+          "conversationClosed",
+          (data: { conversationId: string; closedBy: string }) => {
+            if (data.conversationId === conversationId) {
+              setConnectionStatus("closed");
+
+              saveGuestChatSession({
+                conversationId: conversationId,
+                email: guestEmail.trim() || undefined,
+                status: "closed",
+              });
+            }
+          }
+        );
+
+        // Join the conversation room
+        await joinChatRoom(conversationId, guestId, "guest");
+        console.log(`[Guest] Rejoined conversation room: ${conversationId}`);
+      }
+
+      setIsConnecting(false);
+    } catch (err) {
+      console.error("Failed to restore connection:", err);
+      setError("Failed to restore connection. Please try again.");
+      setIsConnecting(false);
+    }
+  };
+
   const handleStartChat = async () => {
-    if (!guestName.trim()) {
-      setError("Please enter your name");
-      return;
-    }
-
-    if (useEmail && !guestEmail.trim()) {
-      setError("Please enter your email");
-      return;
-    }
-
-    if (useEmail && !isValidEmail(guestEmail)) {
+    // Email is now optional - only validate if provided
+    if (guestEmail.trim() && !isValidEmail(guestEmail)) {
       setError("Please enter a valid email address");
       return;
     }
@@ -150,21 +280,29 @@ export default function GuestChatWidget({
     setError(null);
 
     try {
-      // Start anonymous chat with email or guestId
+      // Start anonymous chat with email (optional)
+      // If email is provided, backend will use it to generate persistent guest ID
+      // If no email, pass the temporary guestId
       const session = await startAnonymousChat(
-        useEmail ? undefined : guestId,
+        guestEmail.trim() ? undefined : guestId,
         serviceCenterId,
-        useEmail ? guestEmail : undefined
+        guestEmail.trim() || undefined
       );
 
-      // Save session info
-      if (useEmail && typeof window !== "undefined") {
+      // Save session info only if email was provided
+      if (typeof window !== "undefined" && guestEmail.trim()) {
         localStorage.setItem("guestChatEmail", guestEmail);
       }
 
       setConversationId(session.conversationId);
-      saveGuestConversationId(session.conversationId);
       setConnectionStatus("waiting");
+
+      // Save complete session
+      saveGuestChatSession({
+        conversationId: session.conversationId,
+        email: guestEmail.trim() || undefined,
+        status: "waiting",
+      });
 
       // Initialize socket connection only after chat is started
       await initializeSocket();
@@ -212,6 +350,14 @@ export default function GuestChatWidget({
             console.log("[Guest] Received chatAccepted event:", data);
             if (data.conversationId === session.conversationId) {
               setConnectionStatus("active");
+
+              // Update session status
+              saveGuestChatSession({
+                conversationId: session.conversationId,
+                email: guestEmail.trim() || undefined,
+                status: "active",
+              });
+
               setMessages((prev) => [
                 ...prev,
                 {
@@ -233,6 +379,14 @@ export default function GuestChatWidget({
           "conversationClosed",
           (data: { conversationId: string; closedBy: string }) => {
             if (data.conversationId === session.conversationId) {
+              setConnectionStatus("closed");
+
+              // Update session to closed state
+              saveGuestChatSession({
+                conversationId: session.conversationId,
+                email: guestEmail.trim() || undefined,
+                status: "closed",
+              });
               setConnectionStatus("closed");
               setMessages((prev) => [
                 ...prev,
@@ -258,7 +412,7 @@ export default function GuestChatWidget({
       setMessages([
         {
           messageId: "welcome",
-          content: `Hello ${guestName}! Please wait while we connect you with a staff member.`,
+          content: `Hello! Please wait while we connect you with a staff member.`,
           senderId: "system",
           senderType: "staff",
           senderName: "System",
@@ -308,7 +462,7 @@ export default function GuestChatWidget({
         content: messageContent || `📎 ${selectedFile?.name || "attachment"}`,
         senderId: guestId,
         senderType: "guest",
-        senderName: guestName || "You",
+        senderName: "You",
         sentAt: new Date().toISOString(),
         isRead: false,
       };
@@ -344,7 +498,6 @@ export default function GuestChatWidget({
     setConversationId(null);
     setMessages([]);
     setConnectionStatus("idle");
-    setGuestName("");
     setGuestEmail("");
     setInputText("");
     setError(null);
@@ -625,66 +778,24 @@ export default function GuestChatWidget({
                       </motion.p>
                     </div>
 
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        Your Name
-                      </label>
-                      <input
-                        type="text"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Enter your name"
-                        className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
-                      />
-                    </motion.div>
-
-                    {/* Email Option Toggle */}
+                    {/* Email Input (optional) */}
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 }}
-                      className="flex items-center gap-3"
                     >
-                      <input
-                        type="checkbox"
-                        id="useEmail"
-                        checked={useEmail}
-                        onChange={(e) => setUseEmail(e.target.checked)}
-                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-2 focus:ring-blue-500/50"
-                      />
-                      <label
-                        htmlFor="useEmail"
-                        className="text-sm text-gray-300 cursor-pointer"
-                      >
-                        Save chat history with email (optional)
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        Your Email
                       </label>
+                      <input
+                        type="email"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="your.email@example.com"
+                        className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
+                      />
                     </motion.div>
-
-                    {/* Email Input (conditional) */}
-                    {useEmail && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                      >
-                        <label className="block text-sm font-medium text-gray-300 mb-3">
-                          Your Email
-                        </label>
-                        <input
-                          type="email"
-                          value={guestEmail}
-                          onChange={(e) => setGuestEmail(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="your.email@example.com"
-                          className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 backdrop-blur-sm"
-                        />
-                      </motion.div>
-                    )}
 
                     {error && (
                       <motion.div
@@ -701,7 +812,7 @@ export default function GuestChatWidget({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5 }}
                       onClick={handleStartChat}
-                      disabled={isConnecting || !guestName.trim()}
+                      disabled={isConnecting}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-emerald-500 text-white py-4 rounded-xl hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3 font-semibold text-base relative overflow-hidden group"
@@ -740,16 +851,15 @@ export default function GuestChatWidget({
                       <button
                         onClick={() => {
                           setResumeMode(false);
-                          setUseEmail(true);
-                          // Show resume form inline
+                          // Email is always enabled now
                         }}
                         className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
                       >
                         Resume previous chat with email
                       </button>
 
-                      {/* Resume Form (shown when clicked) */}
-                      {useEmail && guestEmail && (
+                      {/* Resume Form (shown when email is provided) */}
+                      {guestEmail && (
                         <motion.button
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
