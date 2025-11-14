@@ -16,6 +16,7 @@ import {
   Eye,
 } from "lucide-react";
 import apiClient from "@/lib/apiClient";
+import { authService } from "@/services";
 import StockTransferRequestDetailModal from "./StockTransferRequestDetailModal";
 
 interface StockTransferRequest {
@@ -69,6 +70,10 @@ export default function StockTransferRequestManager() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  // Get current user role
+  const currentUser = authService.getUserInfo() || authService.getCurrentUser();
+  const isEMVStaff = currentUser?.roleName === "emv_staff";
 
   // Modal states
   const [showApproveModal, setShowApproveModal] = useState(false);
@@ -379,7 +384,7 @@ export default function StockTransferRequestManager() {
 
               {/* Actions */}
               <div className="pt-4 border-t border-gray-200">
-                {request.status === "PENDING_APPROVAL" && (
+                {request.status === "PENDING_APPROVAL" && isEMVStaff && (
                   <div className="flex gap-3 mb-3">
                     <button
                       onClick={() => openApproveModal(request.id)}
