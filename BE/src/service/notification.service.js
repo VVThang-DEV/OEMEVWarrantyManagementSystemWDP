@@ -121,7 +121,7 @@ class NotificationService {
       case "service_center_staff":
         rooms.push(`service_center_staff_${serviceCenterId}`);
         break;
-      case "technician":
+      case "service_center_technician":
         rooms.push(`technician_service_center_${serviceCenterId}`);
         break;
       default:
