@@ -1,6 +1,6 @@
 import db from "../models/index.cjs";
 import { ConflictError, NotFoundError } from "../error/index.js";
-import { Sequelize } from "sequelize";
+import { Sequelize, Op } from "sequelize";
 
 const {
   TaskAssignment,
@@ -38,11 +38,13 @@ class TaskAssignmentRepository {
       ],
       where: {
         technicianId: technicianIds,
-        [Sequelize.where(
-          Sequelize.fn("DATE", Sequelize.col("assigned_at")),
-          "=",
-          date
-        )]: "",
+        [Op.and]: [
+          Sequelize.where(
+            Sequelize.fn("DATE", Sequelize.col("assigned_at")),
+            "=",
+            date
+          ),
+        ],
       },
       group: ["technicianId"],
       raw: true,
