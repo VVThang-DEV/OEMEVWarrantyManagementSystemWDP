@@ -11,13 +11,10 @@ import {
   Layers,
   Boxes,
   Loader,
-  PlusCircle,
 } from "lucide-react";
 
 import AllocateComponentModal from "./AllocationModal";
 import TransferComponentModal from "./TransferModal";
-import RestockRequestModal from "./RestockRequestModal";
-
 import { warehouseService } from "@/services/warehouseService";
 import { usePolling } from "@/hooks/usePolling";
 
@@ -33,7 +30,6 @@ export default function Inventory() {
   const [filteredComponents, setFilteredComponents] = useState<Component[]>([]);
   const [isAllocModalOpen, setAllocModalOpen] = useState(false);
   const [isTransferModalOpen, setTransferModalOpen] = useState(false);
-  const [isRestockModalOpen, setRestockModalOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "quantity">("name");
@@ -41,11 +37,9 @@ export default function Inventory() {
   const [loading, setLoading] = useState(false);
   const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
 
-  // ⭐ STATE CẦN THÊM
   const [warehouseId, setWarehouseId] = useState<string>("");
   const [warehouseName, setWarehouseName] = useState<string>("Loading...");
 
-  // ⭐ Load warehouse khi page mở
   useEffect(() => {
     async function loadWarehouse() {
       try {
@@ -63,7 +57,6 @@ export default function Inventory() {
     loadWarehouse();
   }, []);
 
-  // Real-time polling
   const { isPolling } = usePolling(
     async () => {
       const data = await warehouseService.getComponents();
@@ -73,11 +66,7 @@ export default function Inventory() {
     },
     {
       interval: 30000,
-      enabled:
-        !loading &&
-        !isAllocModalOpen &&
-        !isTransferModalOpen &&
-        !isRestockModalOpen,
+      enabled: !loading && !isAllocModalOpen && !isTransferModalOpen,
       onError: (err) => {
         console.error("❌ Inventory polling error:", err);
       },
@@ -101,7 +90,6 @@ export default function Inventory() {
     fetchComponents();
   }, []);
 
-  // Filtering + sorting
   useEffect(() => {
     let filtered = [...components];
 
@@ -150,7 +138,6 @@ export default function Inventory() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="mb-6">
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2 pt-2">
@@ -188,18 +175,9 @@ export default function Inventory() {
             <Layers className="w-4 h-4" />
             Transfer
           </button>
-
-          <button
-            onClick={() => setRestockModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium text-sm"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Request Restock
-          </button>
         </div>
       </div>
 
-      {/* Summary Stats */}
       <div className="grid grid-cols-3 gap-6">
         <div className="bg-white border border-gray-200 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-3">
@@ -236,7 +214,6 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Search + Filter */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -285,7 +262,6 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50">
@@ -403,7 +379,6 @@ export default function Inventory() {
         </table>
       </div>
 
-      {/* MODALS */}
       <AllocateComponentModal
         isOpen={isAllocModalOpen}
         onClose={() => {
@@ -418,17 +393,6 @@ export default function Inventory() {
           setTransferModalOpen(false);
           fetchComponents();
         }}
-      />
-
-      <RestockRequestModal
-        isOpen={isRestockModalOpen}
-        onClose={() => {
-          setRestockModalOpen(false);
-          fetchComponents();
-        }}
-        components={components}
-        warehouseId={warehouseId}
-        warehouseName={warehouseName}
       />
     </div>
   );

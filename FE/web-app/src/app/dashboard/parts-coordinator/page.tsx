@@ -3,7 +3,15 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
-import { Home, Package, Settings, Boxes, Clock1, Truck } from "lucide-react";
+import {
+  Home,
+  Package,
+  Settings,
+  Boxes,
+  Clock1,
+  Truck,
+  RotateCcw,
+} from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
 
@@ -25,7 +33,10 @@ import { CreateAdjustmentModal } from "@/components/dashboard/partscoordinatorda
 import ComponentReservationQueue from "@/components/dashboard/partscoordinatordashboard/ComponentReservationQueue";
 import { ComponentPickupList } from "@/components/dashboard/partscoordinatordashboard/ComponentPickupList";
 import { StockTransferReceiving } from "@/components/dashboard/partscoordinatordashboard/StockTransferReceiving";
-import { RotateCcw } from "lucide-react";
+
+import RestockPage from "@/components/dashboard/partscoordinatordashboard/RestockPage";
+import { warehouseService } from "@/services/warehouseService";
+
 interface CurrentUser {
   userId: string;
   username?: string;
@@ -48,9 +59,10 @@ export default function PartsCoordinatorDashboard() {
 
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
-
-  // ✅ popup create adjustment
   const [showCreateAdjustment, setShowCreateAdjustment] = useState(false);
+
+  const [warehouseId, setWarehouseId] = useState("");
+  const [warehouseName, setWarehouseName] = useState("Warehouse");
 
   useEffect(() => {
     const userInfo = authService.getUserInfo();
@@ -58,26 +70,37 @@ export default function PartsCoordinatorDashboard() {
     else setCurrentUser(authService.getCurrentUser());
   }, []);
 
-  const handleLogout = () => authService.logout();
+  useEffect(() => {
+    async function loadWarehouse() {
+      try {
+        const data = await warehouseService.getWarehouseInfo();
+        if (data.warehouses.length > 0) {
+          setWarehouseId(data.warehouses[0].warehouseId);
+          setWarehouseName(data.warehouses[0].name);
+        }
+      } catch (err) {
+        console.error("Failed to load warehouse info:", err);
+      }
+    }
 
-  // ✅ Lấy warehouseId để truyền vào popup
-  const warehouseId =
-    currentUser?.serviceCenterId || currentUser?.companyId || "";
+    loadWarehouse();
+  }, []);
+
+  const handleLogout = () => authService.logout();
 
   const isServiceCenterCoordinator =
     currentUser?.roleName === "parts_coordinator_service_center";
 
-  // ====================== NAV ITEMS ==========================
   const baseNavItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
     { id: "inventory", icon: Boxes, label: "Inventory" },
+    { id: "restock", icon: Package, label: "Restock Requests" },
     { id: "adjustments", icon: Clock1, label: "Adjustments" },
     { id: "stock-history", icon: Clock1, label: "Stock History" },
     { id: "reservations", icon: Package, label: "Reservations" },
     { id: "pickups", icon: Package, label: "Component Pickups" },
   ];
 
-  // Add "Receive Shipments" only for Service Center Parts Coordinators
   const navItems = isServiceCenterCoordinator
     ? [
         ...baseNavItems,
@@ -89,13 +112,12 @@ export default function PartsCoordinatorDashboard() {
         { id: "status", icon: Settings, label: "Component Status" },
       ];
 
-  // ==================== PAGE RENDER ==========================
   const renderContent = () => {
     switch (activeNav) {
       case "dashboard":
         return <PartsCoordinatorDashboardOverview />;
 
-      case "inventory":
+      case "inventory": {
         const isCompanyCoordinator =
           currentUser?.roleName === "parts_coordinator_company";
 
@@ -129,12 +151,19 @@ export default function PartsCoordinatorDashboard() {
             </div>
           </div>
         );
+      }
 
-      // ✅ STOCK HISTORY
+      case "restock":
+        return (
+          <RestockPage
+            warehouseId={warehouseId}
+            warehouseName={warehouseName}
+          />
+        );
+
       case "stock-history":
         return <StockHistoryList warehouseId={warehouseId} />;
 
-      // ✅ ADJUSTMENTS PAGE
       case "adjustments":
         return (
           <>
@@ -142,7 +171,6 @@ export default function PartsCoordinatorDashboard() {
               onCreateClick={() => setShowCreateAdjustment(true)}
             />
 
-            {/* ✅ POPUP */}
             <CreateAdjustmentModal
               isOpen={showCreateAdjustment}
               onClose={() => setShowCreateAdjustment(false)}
@@ -151,20 +179,16 @@ export default function PartsCoordinatorDashboard() {
           </>
         );
 
-      // ✅ RESERVATIONS
       case "reservations":
         return <ComponentReservationQueue />;
 
-      // ✅ PICKUPS
       case "pickups":
         return (
           <ComponentPickupList serviceCenterId={currentUser?.serviceCenterId} />
         );
 
-      // ✅ RECEIVE SHIPMENTS (Only for Service Center Parts Coordinators)
       case "receiving":
-        // Only show for Service Center Parts Coordinators
-        if (currentUser?.roleName !== "parts_coordinator_service_center") {
+        if (!isServiceCenterCoordinator) {
           return (
             <div className="flex-1 overflow-auto">
               <div className="p-8">
@@ -197,8 +221,7 @@ export default function PartsCoordinatorDashboard() {
                     Components to Return
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    Installed components with old parts ready to be returned to
-                    warehouse
+                    Installed components with old parts ready to be returned
                   </p>
                 </div>
                 <div className="p-6">
@@ -217,7 +240,6 @@ export default function PartsCoordinatorDashboard() {
     }
   };
 
-  // ==================== MAIN LAYOUT ==========================
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar

@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import { Trash2, PlusCircle } from "lucide-react";
 import stockTransferService from "@/services/stockTransferService";
 
 interface ComponentItem {
   id: string;
   name: string;
-  code: string; // code = sku
+  code: string;
   quantity: number;
 }
 
@@ -45,10 +46,19 @@ export default function RestockRequestModal({
     value: string | number
   ) => {
     const updated = [...items];
-    updated[index] = {
-      ...updated[index],
-      [field]: value,
-    };
+    updated[index][field] = value as never;
+    setItems(updated);
+  };
+
+  const addItem = () => {
+    setItems([
+      ...items,
+      { typeComponentId: "", sku: "", quantityRequested: 1 },
+    ]);
+  };
+
+  const removeItem = (index: number) => {
+    const updated = items.filter((_, i) => i !== index);
     setItems(updated);
   };
 
@@ -56,16 +66,17 @@ export default function RestockRequestModal({
     try {
       setLoading(true);
 
-      // ❗ CHỈ GỬI sku + quantityRequested — KHÔNG GỬI typeComponentId
       const payloadItems = items.map(({ sku, quantityRequested }) => ({
         sku,
         quantityRequested,
       }));
 
-      await stockTransferService.createWarehouseRestock({
+      const res = await stockTransferService.createWarehouseRestock({
         requestingWarehouseId: warehouseId,
         items: payloadItems,
       });
+
+      console.log("📦 Restock response:", res); // 👈 LOG FULL RESPONSE Ở ĐÂY
 
       onClose();
     } catch (error) {
@@ -91,48 +102,75 @@ export default function RestockRequestModal({
           <p className="text-xs text-gray-500">Warehouse ID: {warehouseId}</p>
         </div>
 
-        {/* Items */}
-        {items.map((item, index) => (
-          <div key={index} className="grid grid-cols-2 gap-3">
-            {/* Component dropdown */}
-            <select
-              value={item.typeComponentId}
-              onChange={(e) => {
-                const id = e.target.value;
-                const selected = components.find((c) => c.id === id);
+        {/* Items list */}
+        <div className="space-y-3">
+          {items.map((item, index) => {
+            const selectedComponent = components.find(
+              (c) => c.id === item.typeComponentId
+            );
 
-                updateItemField(index, "typeComponentId", id);
-                // auto-fill sku từ code
-                updateItemField(index, "sku", selected?.code || "");
-              }}
-              className="px-3 py-2 border rounded-lg text-black"
-            >
-              <option value="">Select component...</option>
+            return (
+              <div key={index} className="grid grid-cols-12 gap-3 items-center">
+                {/* Dropdown */}
+                <select
+                  value={item.typeComponentId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const selected = components.find((c) => c.id === id);
 
-              {components.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
+                    updateItemField(index, "typeComponentId", id);
+                    updateItemField(index, "sku", selected?.code || "");
+                  }}
+                  className="col-span-7 px-3 py-2 border rounded-lg bg-white text-black w-full"
+                >
+                  <option value="" disabled hidden>
+                    Select component...
+                  </option>
 
-            {/* Quantity */}
-            <input
-              type="number"
-              min={1}
-              placeholder="Qty"
-              value={item.quantityRequested}
-              onChange={(e) =>
-                updateItemField(
-                  index,
-                  "quantityRequested",
-                  Number(e.target.value)
-                )
-              }
-              className="px-3 py-2 border rounded-lg text-black"
-            />
-          </div>
-        ))}
+                  {components.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Quantity */}
+                <input
+                  type="number"
+                  min={1}
+                  value={item.quantityRequested}
+                  onChange={(e) =>
+                    updateItemField(
+                      index,
+                      "quantityRequested",
+                      Number(e.target.value)
+                    )
+                  }
+                  className="col-span-3 px-3 py-2 border rounded-lg bg-white text-black w-full"
+                />
+
+                {/* Remove button */}
+                {index > 0 && (
+                  <button
+                    onClick={() => removeItem(index)}
+                    className="col-span-2 flex justify-center items-center text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Add item button */}
+        <button
+          onClick={addItem}
+          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+        >
+          <PlusCircle className="w-5 h-5" />
+          Add another component
+        </button>
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4">
