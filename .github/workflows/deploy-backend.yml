@@ -26,10 +26,13 @@ jobs:
 
       - name: 🔁 Install & Restart via PM2
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: BACKEND_ENV
           script: |
             set -e
             export NVM_DIR="$HOME/.nvm"
@@ -37,6 +40,11 @@ jobs:
             command -v pm2 >/dev/null 2>&1 || npm i -g pm2
 
             cd ~/myapp/backend
+
+            echo "=== Writing .env from GitHub secret BACKEND_ENV ==="
+            printf '%s\n' "$BACKEND_ENV" > .env
+            echo "=== .env preview (first lines) ==="
+            head -n 5 .env || true
             
             # Verify uploaded file has the fix
             echo "=== Checking user.repository.js for SQL subquery fix ==="
