@@ -312,9 +312,9 @@ export default function TaskAssignmentList() {
           ) : (
             <>
               <div className="divide-y divide-gray-200">
-                {getFilteredTasks().map((task, index) => (
+                {getFilteredTasks().map((task, index, array) => (
                   <motion.div
-                    key={task.id}
+                    key={task.id || `task-${index}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
@@ -336,7 +336,7 @@ export default function TaskAssignmentList() {
                             <Wrench className="w-6 h-6" />
                           )}
                         </div>
-                        {index < tasks.length - 1 && (
+                        {index < array.length - 1 && (
                           <div className="w-0.5 flex-1 bg-gray-200 mt-2" />
                         )}
                       </div>

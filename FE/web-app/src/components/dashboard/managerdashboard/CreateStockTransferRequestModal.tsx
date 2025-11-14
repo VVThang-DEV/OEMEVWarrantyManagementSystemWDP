@@ -73,7 +73,7 @@ export function CreateStockTransferRequestModal({
       setLoadingCaseLines(true);
       try {
         const response = await caseLineService.getCaseLinesList({
-          status: "WAITING_FOR_PARTS", // Only show case lines waiting for parts
+          status: "CUSTOMER_APPROVED", // Show customer-approved case lines that need parts
           page: 1,
           limit: 100,
         });
