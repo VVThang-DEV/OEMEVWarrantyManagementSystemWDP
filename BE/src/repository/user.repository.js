@@ -89,7 +89,7 @@ class UserRepository {
         },
       ],
 
-      group: ["userId"],
+      group: ["User.user_id", "workSchedule.schedule_id"],
     });
 
     return technicians.map((technician) => technician.toJSON());
