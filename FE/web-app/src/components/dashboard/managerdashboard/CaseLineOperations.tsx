@@ -317,9 +317,14 @@ export function CaseLineOperations() {
   };
 
   const handleOpenTechnicianModal = (caseLineId: string) => {
+    const caseLine = caseLines.find(
+      (cl: any) => cl.id === caseLineId || cl.caseLineId === caseLineId
+    );
+
     setSelectedCaseLineForAssignment(caseLineId);
     setShowTechnicianModal(true);
-    setSelectedTechnician("");
+    // Pre-select current technician if already assigned
+    setSelectedTechnician(caseLine?.repairTechnician?.userId || "");
   };
 
   const handleAssignTechnician = async () => {
@@ -976,16 +981,27 @@ export function CaseLineOperations() {
                               onClick={() =>
                                 handleOpenTechnicianModal(caseLine.id)
                               }
-                              disabled={caseLine.status !== "READY_FOR_REPAIR"}
-                              className="flex-1 px-4 py-2.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                              disabled={
+                                caseLine.status !== "READY_FOR_REPAIR" ||
+                                !!caseLine.repairTechnician
+                              }
+                              className={`flex-1 px-4 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium ${
+                                caseLine.repairTechnician
+                                  ? "bg-green-600 text-white"
+                                  : "bg-gray-900 text-white hover:bg-gray-800"
+                              }`}
                               title={
-                                caseLine.status !== "READY_FOR_REPAIR"
+                                caseLine.repairTechnician
+                                  ? `Assigned to ${caseLine.repairTechnician.name}`
+                                  : caseLine.status !== "READY_FOR_REPAIR"
                                   ? "Stock must be allocated first"
                                   : "Assign technician"
                               }
                             >
                               <UserPlus className="w-4 h-4" />
-                              Assign Technician
+                              {caseLine.repairTechnician
+                                ? caseLine.repairTechnician.name
+                                : "Assign Technician"}
                             </button>
                           </div>
                         </div>

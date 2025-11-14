@@ -145,9 +145,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
 
-    // Sync with backend
+    // Sync with backend (ignore 404 if already read)
     markNotificationAsReadAPI(notificationId).catch((error) => {
-      console.error("❌ Failed to mark notification as read:", error);
+      const axiosError = error as { response?: { status?: number } };
+      if (axiosError.response?.status !== 404) {
+        console.error("❌ Failed to mark notification as read:", error);
+      }
+      // 404 means already read or not found - UI already updated, ignore
     });
   }, []);
 

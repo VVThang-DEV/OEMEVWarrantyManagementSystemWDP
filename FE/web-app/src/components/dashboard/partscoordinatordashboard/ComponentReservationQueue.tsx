@@ -20,6 +20,8 @@ export default function ComponentReservationQueue() {
   const [reservations, setReservations] = useState<ComponentReservation[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [pagination, setPagination] = useState({
     total: 0,
@@ -123,16 +125,44 @@ export default function ComponentReservationQueue() {
   };
 
   const handlePickup = async (reservationId: string) => {
-    const techId = prompt("Enter Technician ID:");
-    if (!techId) return;
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    // Find the reservation to get technician ID
+    const reservation = reservations.find(
+      (r) => r.reservationId === reservationId
+    );
+
+    if (!reservation) {
+      setErrorMessage("Reservation not found");
+      return;
+    }
+
+    // Get technician ID from the case line's repair technician
+    const techId = reservation.caseLine?.repairTechId;
+
+    if (!techId) {
+      setErrorMessage(
+        "No technician assigned to this repair. Please assign a technician first in Case Line Operations."
+      );
+      return;
+    }
 
     try {
       await componentReservationService.pickupComponent(reservationId, techId);
+      setSuccessMessage(
+        `Component picked up successfully by ${
+          reservation.caseLine?.repairTechnician?.name || "technician"
+        }`
+      );
       setCurrentPage(pagination.page); // Keep current page
       loadReservations(pagination.page, statusFilter);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Error picking up component:", err);
-      alert("Failed to pick up component");
+      const error = err as { response?: { data?: { message?: string } } };
+      setErrorMessage(
+        error?.response?.data?.message || "Failed to pick up component"
+      );
     }
   };
 
@@ -204,6 +234,39 @@ export default function ComponentReservationQueue() {
             </div>
           </div>
 
+          {/* ERROR/SUCCESS MESSAGES */}
+          {errorMessage && (
+            <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">Error</p>
+                <p className="text-sm text-red-700 mt-1">{errorMessage}</p>
+              </div>
+              <button
+                onClick={() => setErrorMessage("")}
+                className="text-red-400 hover:text-red-600 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mx-6 mt-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">Success</p>
+                <p className="text-sm text-green-700 mt-1">{successMessage}</p>
+              </div>
+              <button
+                onClick={() => setSuccessMessage("")}
+                className="text-green-400 hover:text-green-600 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -272,14 +335,13 @@ export default function ComponentReservationQueue() {
                             </div>
                           )}
 
-                          {/* Quantity */}
+                          {/* Serial Number */}
                           <div>
                             <p className="text-xs text-gray-500 mb-1">
-                              Quantity
+                              Serial Number
                             </p>
-                            <p className="text-sm text-gray-900 font-semibold">
-                              {reservation.quantityReserved} unit
-                              {reservation.quantityReserved > 1 ? "s" : ""}
+                            <p className="text-sm text-gray-900 font-mono font-semibold">
+                              {reservation.component?.serialNumber || "N/A"}
                             </p>
                           </div>
                         </div>
@@ -294,8 +356,11 @@ export default function ComponentReservationQueue() {
                               {new Date(
                                 reservation.pickedUpAt
                               ).toLocaleString()}
-                              {reservation.pickedUpBy &&
-                                ` by Tech ID: ${reservation.pickedUpBy}`}
+                              {reservation.pickedUpByTech && (
+                                <span className="block mt-1">
+                                  by {reservation.pickedUpByTech.name}
+                                </span>
+                              )}
                             </p>
                           </div>
                         )}

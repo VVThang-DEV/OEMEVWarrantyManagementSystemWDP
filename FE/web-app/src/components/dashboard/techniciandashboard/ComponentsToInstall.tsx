@@ -95,7 +95,7 @@ export function ComponentsToInstall() {
       reservationId: reservation.reservationId,
       componentName: component.typeComponent?.name || "Component",
       vehicleVin: component.guaranteeCase?.vehicleProcessingRecord?.vin || "",
-      componentSerial: "", // Will be auto-filled by backend from reservation
+      componentSerial: reservation.component?.serialNumber || "",
     });
   };
   const handleInstallSuccess = () => {
@@ -157,18 +157,26 @@ export function ComponentsToInstall() {
                 key={component.id || component.caseLineId}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-gray-50 rounded-lg p-3 hover:bg-purple-50 hover:border-purple-200 border border-transparent transition-colors"
+                className="bg-white rounded-lg p-3 hover:bg-purple-50 hover:border-purple-200 border border-gray-200 transition-colors"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Wrench className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
-                      <h3 className="font-medium text-gray-900 text-sm truncate">
-                        {component.typeComponent?.name || "Component"}
-                      </h3>
-                    </div>
-
+                    <h4 className="font-medium text-gray-900 text-sm truncate mb-1">
+                      {component.typeComponent?.name || "Component"}
+                    </h4>
                     <div className="space-y-0.5 text-xs text-gray-600">
+                      {component.diagnosisText && (
+                        <p className="truncate">
+                          <span className="font-medium">Diagnosis:</span>{" "}
+                          {component.diagnosisText}
+                        </p>
+                      )}
+                      {component.correctionText && (
+                        <p className="truncate">
+                          <span className="font-medium">Correction:</span>{" "}
+                          {component.correctionText}
+                        </p>
+                      )}
                       <p>
                         <span className="font-medium">Qty:</span>{" "}
                         {component.reservations?.filter(
@@ -181,7 +189,7 @@ export function ComponentsToInstall() {
                         <span className="font-medium">Case:</span>{" "}
                         {component.guaranteeCaseId}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1 truncate">
+                      <p className="text-xs text-gray-500">
                         Status: {component.status} • Picked up, ready to install
                       </p>
                     </div>
@@ -189,9 +197,9 @@ export function ComponentsToInstall() {
 
                   <button
                     onClick={() => handleInstallClick(component)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm whitespace-nowrap"
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
                   >
-                    <Wrench className="w-3.5 h-3.5" />
+                    <Wrench className="w-4 h-4" />
                     Install
                   </button>
                 </div>

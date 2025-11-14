@@ -119,10 +119,10 @@ export function RepairsToComplete() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 text-sm truncate">
+                    <h4 className="font-medium text-gray-900 text-sm truncate mb-1">
                       {caseLine.typeComponent?.name || "Component"}
                     </h4>
-                    <div className="mt-1 space-y-0.5 text-xs text-gray-600">
+                    <div className="space-y-0.5 text-xs text-gray-600">
                       {caseLine.diagnosisText && (
                         <p className="truncate">
                           <span className="font-medium">Diagnosis:</span>{" "}
@@ -135,6 +135,10 @@ export function RepairsToComplete() {
                           {caseLine.correctionText}
                         </p>
                       )}
+                      <p>
+                        <span className="font-medium">Qty:</span>{" "}
+                        {caseLine.quantity || 1}
+                      </p>
                       <p className="truncate">
                         <span className="font-medium">Case:</span>{" "}
                         {caseLine.guaranteeCaseId}
