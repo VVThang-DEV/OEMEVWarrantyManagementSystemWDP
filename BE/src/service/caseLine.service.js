@@ -423,6 +423,12 @@ class CaseLineService {
         quantity: caseline.quantity,
       });
 
+      if (!Array.isArray(reservations) || reservations.length === 0) {
+        throw new ConflictError(
+          "Unable to determine stock reservations for this caseline"
+        );
+      }
+
       const componentIds = await this.#collectComponentsFromReservations({
         reservations,
         caseline,
@@ -430,10 +436,32 @@ class CaseLineService {
         transaction,
       });
 
+      if (!Array.isArray(componentIds) || componentIds.length === 0) {
+        throw new ConflictError(
+          "Unable to collect components for the requested caseline"
+        );
+      }
+
+      if (componentIds.length !== caseline.quantity) {
+        throw new ConflictError(
+          "Collected component quantity does not match requested caseline quantity"
+        );
+      }
+
       const componentReservationsToCreate = componentIds.map((componentId) => ({
         caseLineId: caselineId,
         componentId: componentId,
       }));
+
+      if (componentReservationsToCreate.length === 0) {
+        throw new ConflictError(
+          "No component reservations generated for the requested caseline"
+        );
+      }
+
+      const uniqueStockIds = [
+        ...new Set(reservations.map((item) => item.stockId)),
+      ];
 
       const [
         componentReservations,
@@ -468,6 +496,33 @@ class CaseLineService {
         ),
       ]);
 
+      if (
+        !Array.isArray(componentReservations) ||
+        componentReservations.length !== componentReservationsToCreate.length
+      ) {
+        throw new ConflictError(
+          "Failed to create component reservations for this caseline"
+        );
+      }
+
+      if (
+        !Array.isArray(stockUpdates) ||
+        stockUpdates.length !== uniqueStockIds.length
+      ) {
+        throw new ConflictError("Failed to update stock quantities");
+      }
+
+      if (componentStatusUpdates !== componentIds.length) {
+        throw new ConflictError("Failed to update component statuses");
+      }
+
+      if (
+        !Array.isArray(caselineStatusUpdate) ||
+        caselineStatusUpdate.length === 0
+      ) {
+        throw new ConflictError("Failed to update caseline status");
+      }
+
       return {
         componentReservations,
         stockUpdates,
@@ -483,7 +538,9 @@ class CaseLineService {
       caselineStatusUpdate,
     } = rawResult;
 
-    const stockIds = (stockUpdates || []).map((stock) => stock.stockId);
+    const stockIds = [
+      ...new Set((stockUpdates || []).map((stock) => stock.stockId)),
+    ];
 
     if (stockIds.length > 0) {
       await this.#inventoryService.emitLowStockAlerts({ stockIds });
