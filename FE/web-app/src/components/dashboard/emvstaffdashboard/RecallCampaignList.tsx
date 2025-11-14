@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import recallService, { RecallCampaign } from "@/services/recallService";
-import toast from "react-hot-toast";
 import {
   Loader2,
   Plus,
@@ -14,6 +13,7 @@ import {
   FileText,
   Rocket,
   Filter,
+  AlertCircle,
 } from "lucide-react";
 
 // Status Badge Component
@@ -70,42 +70,95 @@ export function CreateRecallModal({
   onSuccess,
 }: CreateRecallModalProps) {
   const [loading, setLoading] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [issueDate, setIssueDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [modelIds, setModelIds] = useState<string>("");
+  const [availableModels, setAvailableModels] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      loadAvailableModels();
+    } else {
       setName("");
       setDescription("");
       setIssueDate("");
+      setStartDate("");
+      setEndDate("");
       setModelIds("");
+      setSelectedModelIds([]);
+      setError(null);
+      setSuccessMessage(null);
     }
   }, [isOpen]);
+
+  const loadAvailableModels = async () => {
+    try {
+      setLoadingModels(true);
+      // Get all campaigns to extract unique vehicle models
+      const result = await recallService.getRecallCampaigns({
+        page: 1,
+        limit: 100,
+      });
+      const uniqueModels = new Map<string, string>();
+      result.campaigns.forEach((campaign) => {
+        campaign.affectedVehicleModels?.forEach((model) => {
+          uniqueModels.set(model.vehicleModelId, model.vehicleModelName);
+        });
+      });
+      setAvailableModels(
+        Array.from(uniqueModels, ([id, name]) => ({ id, name }))
+      );
+    } catch (err) {
+      console.error("Error loading models:", err);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
 
   const validate = () => {
     if (!name.trim()) return "Campaign name is required.";
     if (!description.trim()) return "Description is required.";
     if (!issueDate) return "Issue date is required.";
-    if (!modelIds.trim()) return "At least one vehicle model ID is required.";
+    if (!startDate) return "Start date is required.";
+    if (!endDate) return "End date is required.";
+    if (new Date(endDate) < new Date(startDate)) {
+      return "End date must be after start date.";
+    }
+    if (selectedModelIds.length === 0 && !modelIds.trim()) {
+      return "Select at least one vehicle model or enter model IDs.";
+    }
     return null;
   };
 
   const submit = async () => {
-    const error = validate();
-    if (error) {
-      toast.error(error);
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     try {
       setLoading(true);
+      setError(null);
+      setSuccessMessage(null);
 
-      const affectedVehicleModelIds = modelIds
-        .split(",")
-        .map((id) => id.trim())
-        .filter((id) => id);
+      // Use selected models or fall back to manual entry
+      let affectedVehicleModelIds = selectedModelIds;
+      if (affectedVehicleModelIds.length === 0 && modelIds.trim()) {
+        affectedVehicleModelIds = modelIds
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id);
+      }
 
       await recallService.createRecallCampaign({
         name: name.trim(),
@@ -114,14 +167,20 @@ export function CreateRecallModal({
         affectedVehicleModelIds,
       });
 
-      toast.success("Recall campaign created successfully!");
-      onSuccess();
-      onClose();
+      setSuccessMessage(
+        `Recall campaign created successfully! Active from ${new Date(
+          startDate
+        ).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`
+      );
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 2000);
     } catch (err) {
       console.error("Error creating recall campaign:", err);
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(
-        error.response?.data?.message || "Failed to create recall campaign"
+      const errorObj = err as { response?: { data?: { message?: string } } };
+      setError(
+        errorObj.response?.data?.message || "Failed to create recall campaign"
       );
     } finally {
       setLoading(false);
@@ -154,30 +213,84 @@ export function CreateRecallModal({
 
         {/* BODY */}
         <div className="px-6 py-5 space-y-5">
+          {/* Error Message */}
+          {error && (
+            <div className="flex gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">Error</p>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600 transition-colors text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {successMessage && (
+            <div className="flex gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">Success</p>
+                <p className="text-sm text-green-700 mt-1">{successMessage}</p>
+              </div>
+            </div>
+          )}
+
           {/* Campaign Name */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-900">
               Campaign Name *
             </label>
             <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Battery Recall Q1 2025"
             />
           </div>
 
-          {/* Issue Date */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-900">
-              Issue Date *
-            </label>
-            <input
-              type="date"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-            />
+          {/* Date Fields Row */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-900">
+                Issue Date *
+              </label>
+              <input
+                type="date"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-900">
+                Start Date *
+              </label>
+              <input
+                type="date"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                min={issueDate}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-900">
+                End Date *
+              </label>
+              <input
+                type="date"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate}
+              />
+            </div>
           </div>
 
           {/* Description */}
@@ -186,29 +299,81 @@ export function CreateRecallModal({
               Description *
             </label>
             <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Detailed description of the recall issue and resolution..."
-              rows={5}
+              rows={4}
             />
           </div>
 
-          {/* Affected Vehicle Model IDs */}
-          <div className="space-y-1">
+          {/* Affected Vehicle Models Selector */}
+          <div className="space-y-2">
             <label className="text-sm font-medium text-gray-900">
-              Affected Vehicle Model IDs *
+              Affected Vehicle Models *
             </label>
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-              value={modelIds}
-              onChange={(e) => setModelIds(e.target.value)}
-              placeholder="Enter comma-separated model IDs, e.g.:&#10;550e8400-e29b-41d4-a716-446655440000,&#10;550e8400-e29b-41d4-a716-446655440001"
-              rows={3}
-            />
-            <p className="text-xs text-gray-500">
-              Separate multiple model IDs with commas
-            </p>
+            {loadingModels ? (
+              <div className="flex items-center justify-center py-8 border border-gray-200 rounded-lg">
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                <span className="ml-2 text-sm text-gray-500">
+                  Loading models...
+                </span>
+              </div>
+            ) : availableModels.length > 0 ? (
+              <div className="border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto bg-white">
+                <div className="space-y-2">
+                  {availableModels.map((model) => (
+                    <label
+                      key={model.id}
+                      className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedModelIds.includes(model.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedModelIds([
+                              ...selectedModelIds,
+                              model.id,
+                            ]);
+                          } else {
+                            setSelectedModelIds(
+                              selectedModelIds.filter((id) => id !== model.id)
+                            );
+                          }
+                        }}
+                        className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                      />
+                      <span className="text-sm text-gray-900">
+                        {model.name}
+                      </span>
+                      <span className="text-xs text-gray-500 font-mono">
+                        ({model.id.slice(0, 8)}...)
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+                <p className="text-sm text-gray-600 mb-2">
+                  No vehicle models found in existing campaigns. Enter model IDs
+                  manually below:
+                </p>
+                <textarea
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono text-sm"
+                  value={modelIds}
+                  onChange={(e) => setModelIds(e.target.value)}
+                  placeholder="550e8400-e29b-41d4-a716-446655440000,&#10;550e8400-e29b-41d4-a716-446655440001"
+                  rows={3}
+                />
+              </div>
+            )}
+            {selectedModelIds.length > 0 && (
+              <p className="text-xs text-green-600 font-medium">
+                {selectedModelIds.length} model(s) selected
+              </p>
+            )}
           </div>
         </div>
 
@@ -318,6 +483,8 @@ export default function RecallCampaignList() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(
     undefined
   );
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [pagination, setPagination] = useState({
     total: 0,
@@ -365,9 +532,10 @@ export default function RecallCampaignList() {
       );
       setSelectedCampaign(detail);
       setShowDetail(true);
+      setError(null);
     } catch (err) {
       console.error("Error fetching campaign detail:", err);
-      toast.error("Failed to load campaign details");
+      setError("Failed to load campaign details");
     }
   };
 
@@ -381,17 +549,20 @@ export default function RecallCampaignList() {
 
     try {
       setActivating(true);
+      setError(null);
       await recallService.activateRecallCampaign(campaignToActivate);
-      toast.success("Campaign activated successfully!");
+      setSuccessMessage("Campaign activated successfully!");
       setShowConfirmActivate(false);
       setCampaignToActivate(null);
       loadCampaigns(pagination.page);
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error("Error activating campaign:", err);
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(
-        error.response?.data?.message || "Failed to activate campaign"
+      const errorObj = err as { response?: { data?: { message?: string } } };
+      setError(
+        errorObj.response?.data?.message || "Failed to activate campaign"
       );
+      setShowConfirmActivate(false);
     } finally {
       setActivating(false);
     }
@@ -399,6 +570,40 @@ export default function RecallCampaignList() {
 
   return (
     <div className="space-y-6">
+      {/* Error Message */}
+      {error && (
+        <div className="flex gap-2 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-900">Error</p>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-400 hover:text-red-600 transition-colors text-xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="flex gap-2 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-green-900">Success</p>
+            <p className="text-sm text-green-700 mt-1">{successMessage}</p>
+          </div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="text-green-400 hover:text-green-600 transition-colors text-xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* HEADER CARD */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow">
         <div className="flex items-center justify-between">
