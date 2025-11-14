@@ -32,7 +32,7 @@ class ComponentRepository {
       where: {
         typeComponentId: typeComponentId,
         warehouseId: warehouseId,
-        status: "IN_WAREHOUSE",
+        status: "IN_STOCK",
       },
       limit: limit,
       transaction,
@@ -226,7 +226,11 @@ class ComponentRepository {
     return component ? component.toJSON() : null;
   };
 
-  findBySerialNumbers = async (serialNumbers, transaction = null, lock = null) => {
+  findBySerialNumbers = async (
+    serialNumbers,
+    transaction = null,
+    lock = null
+  ) => {
     const components = await Component.findAll({
       where: {
         serialNumber: {
@@ -240,7 +244,9 @@ class ComponentRepository {
   };
 
   bulkCreate = async (componentsData, transaction = null) => {
-    const components = await Component.bulkCreate(componentsData, { transaction });
+    const components = await Component.bulkCreate(componentsData, {
+      transaction,
+    });
     return components.map((component) => component.toJSON());
   };
 
@@ -353,23 +359,25 @@ class ComponentRepository {
     return components.map((component) => component.toJSON());
   };
 
-  updateComponentStatusBySerialNumbers = async (serialNumbers, status, warehouseId, transaction = null) => {
+  updateComponentStatusBySerialNumbers = async (
+    serialNumbers,
+    status,
+    warehouseId,
+    transaction = null
+  ) => {
     const updateData = { status };
     if (warehouseId !== undefined) {
       updateData.warehouseId = warehouseId;
     }
 
-    const [numberOfAffectedRows] = await Component.update(
-      updateData,
-      {
-        where: {
-          serialNumber: {
-            [Op.in]: serialNumbers,
-          },
+    const [numberOfAffectedRows] = await Component.update(updateData, {
+      where: {
+        serialNumber: {
+          [Op.in]: serialNumbers,
         },
-        transaction,
-      }
-    );
+      },
+      transaction,
+    });
 
     return numberOfAffectedRows;
   };
