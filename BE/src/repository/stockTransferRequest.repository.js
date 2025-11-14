@@ -164,7 +164,7 @@ class StockTransferRequestRepository {
           include: [
             {
               model: TypeComponent,
-              as: "typeComponent",
+              as: "component",
               attributes: [
                 "typeComponentId",
                 "name",
