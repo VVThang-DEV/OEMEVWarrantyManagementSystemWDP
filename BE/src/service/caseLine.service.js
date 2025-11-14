@@ -692,11 +692,26 @@ class CaseLineService {
         const roomName = `service_center_staff_${serviceCenterId}`;
         const eventName = "vehicleProcessingRecordStatusUpdated";
         const data = {
-          vehicleProcessingRecordId,
-          status: "PROCESSING",
+          type: "case_updated",
+          priority: "medium",
+          title: "Case In Progress",
+          message: `Vehicle processing is now in progress`,
+          timestamp: dayjs().toISOString(),
+          data: {
+            vehicleProcessingRecordId,
+            status: "PROCESSING",
+            navigationAction: "cases",
+            navigationId: vehicleProcessingRecordId,
+          },
         };
 
         await this.#notificationService.sendToRoom(roomName, eventName, data);
+        // Also emit to caseUpdated listener
+        await this.#notificationService.sendToRoom(
+          roomName,
+          "caseUpdated",
+          data
+        );
       }
 
       return { updatedApprovedCaseLines, updatedRejectedCaseLines };
@@ -935,8 +950,17 @@ class CaseLineService {
       const roomName = `user_${technicianId}`;
       const eventName = "newRepairTaskAssigned";
       const data = {
-        taskAssignment,
-        caseline: updatedCaseline,
+        type: "case_assigned",
+        priority: "high",
+        title: "New Repair Task Assigned",
+        message: "You have been assigned a new repair task",
+        timestamp: dayjs().toISOString(),
+        data: {
+          taskAssignment,
+          caseline: updatedCaseline,
+          taskId: taskAssignment.taskAssignmentId,
+          navigationAction: "tasks",
+        },
       };
 
       await this.#notificationService.sendToRoom(roomName, eventName, data);
@@ -1101,11 +1125,26 @@ class CaseLineService {
         const roomName = `service_center_staff_${serviceCenterId}`;
         const eventName = "vehicleProcessingRecordStatusUpdated";
         const data = {
-          roomName,
-          updatedRecord,
+          type: "case_updated",
+          priority: "high",
+          title: "Vehicle Ready for Pickup",
+          message: `Vehicle is ready for customer pickup`,
+          timestamp: dayjs().toISOString(),
+          data: {
+            roomName,
+            updatedRecord,
+            navigationAction: "cases",
+            navigationId: updatedRecord.vehicleProcessingRecordId,
+          },
         };
 
         await this.#notificationService.sendToRoom(roomName, eventName, data);
+        // Also emit to caseUpdated listener
+        await this.#notificationService.sendToRoom(
+          roomName,
+          "caseUpdated",
+          data
+        );
       }
 
       return { updatedCaseline, updatedTaskAssignment };
