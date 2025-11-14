@@ -225,16 +225,9 @@ class CaseLineService {
    * Get case line details by ID
    * GET /case-lines/{caselineId}
    */
-  async getCaseLineById(
-    caselineId: string,
-    caseId?: string
-  ): Promise<CaseLineDetailResponse> {
+  async getCaseLineById(caselineId: string): Promise<CaseLineDetailResponse> {
     try {
-      // If caseId is provided, use it in the URL path (backend validator requires it)
-      const url = caseId
-        ? `/guarantee-cases/${caseId}/case-lines/${caselineId}`
-        : `/case-lines/${caselineId}`;
-      const response = await apiClient.get(url);
+      const response = await apiClient.get(`/case-lines/${caselineId}`);
       return response.data;
     } catch (error: unknown) {
       console.error("Error fetching case line details:", error);
@@ -244,21 +237,17 @@ class CaseLineService {
 
   /**
    * Update case line information
-   * PATCH /guarantee-cases/{caseId}/case-lines/{caselineId}
-   * Note: Backend validator requires both caseId and caselineId in URL params
+   * PATCH /case-lines/{caselineId}
    */
   async updateCaseLine(
     caselineId: string,
     data: UpdateCaseLineData
   ): Promise<UpdateCaseLineResponse> {
     try {
-      // Backend validator requires caseId in URL path, extract from data
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { caseId, ...bodyData } = data;
-      if (!caseId) {
-        throw new Error("caseId is required to update case line");
-      }
       const response = await apiClient.patch(
-        `/guarantee-cases/${caseId}/case-lines/${caselineId}`,
+        `/case-lines/${caselineId}`,
         bodyData
       );
       return response.data;
