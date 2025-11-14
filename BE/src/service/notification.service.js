@@ -93,42 +93,52 @@ class NotificationService {
     return affectedRows;
   };
 
-  #getUserRooms = (user) => {
+  #getUserRooms = (user = {}) => {
     const { userId, role, serviceCenterId, companyId } = user;
-    const rooms = [];
-
-    if (!role || !role.roleName) {
-      return rooms;
-    }
+    const roomSet = new Set();
 
     if (userId) {
-      rooms.push(`user_${userId}`);
+      roomSet.add(`user_${userId}`);
     }
 
-    switch (role.roleName) {
+    const roleName = role?.roleName;
+
+    switch (roleName) {
       case "emv_staff":
-        rooms.push(`emv_staff_${companyId}`);
+        if (companyId) {
+          roomSet.add(`emv_staff_${companyId}`);
+        }
         break;
       case "parts_coordinator_company":
-        rooms.push(`parts_coordinator_company_${companyId}`);
+        if (companyId) {
+          roomSet.add(`parts_coordinator_company_${companyId}`);
+        }
         break;
       case "service_center_manager":
-        rooms.push(`service_center_manager_${serviceCenterId}`);
+        if (serviceCenterId) {
+          roomSet.add(`service_center_manager_${serviceCenterId}`);
+        }
         break;
       case "parts_coordinator_service_center":
-        rooms.push(`parts_coordinator_service_center_${serviceCenterId}`);
+        if (serviceCenterId) {
+          roomSet.add(`parts_coordinator_service_center_${serviceCenterId}`);
+        }
         break;
       case "service_center_staff":
-        rooms.push(`service_center_staff_${serviceCenterId}`);
+        if (serviceCenterId) {
+          roomSet.add(`service_center_staff_${serviceCenterId}`);
+        }
         break;
-      case "service_center_technician":
-        rooms.push(`technician_service_center_${serviceCenterId}`);
+      case "technician":
+        if (serviceCenterId) {
+          roomSet.add(`technician_service_center_${serviceCenterId}`);
+        }
         break;
       default:
         break;
     }
 
-    return rooms.filter(Boolean);
+    return Array.from(roomSet);
   };
 }
 
