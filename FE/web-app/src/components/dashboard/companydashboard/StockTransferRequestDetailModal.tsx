@@ -82,9 +82,10 @@ interface StockTransferRequestDetail {
     typeComponent?: {
       typeComponentId: string;
       name: string;
-      partNumber?: string;
       sku?: string;
       price?: number;
+      category?: string;
+      makeBrand?: string;
     };
   }>;
 }
@@ -445,9 +446,7 @@ export default function StockTransferRequestDetailModal({
                             {item.typeComponent?.name || "Unknown"}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 font-mono">
-                            {item.typeComponent?.partNumber ||
-                              item.typeComponent?.sku ||
-                              "N/A"}
+                            {item.typeComponent?.sku || "N/A"}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
                             {item.quantityRequested}

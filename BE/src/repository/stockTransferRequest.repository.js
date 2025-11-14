@@ -168,9 +168,10 @@ class StockTransferRequestRepository {
               attributes: [
                 "typeComponentId",
                 "name",
-                "partNumber",
                 "sku",
                 "price",
+                "category",
+                "makeBrand",
               ],
               required: false,
             },

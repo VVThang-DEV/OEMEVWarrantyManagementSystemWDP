@@ -54,7 +54,9 @@ interface StockTransferRequest {
     typeComponent: {
       typeComponentId: string;
       name: string;
-      partNumber: string;
+      sku: string;
+      category?: string;
+      makeBrand?: string;
     };
     quantityRequested: number;
     quantityApproved?: number;
@@ -365,8 +367,8 @@ export default function StockTransferRequestManager() {
                         className="text-sm text-gray-600 flex justify-between"
                       >
                         <span>
-                          {item.typeComponent.name} (
-                          {item.typeComponent.partNumber})
+                          {item.typeComponent.name} (SKU:{" "}
+                          {item.typeComponent.sku})
                         </span>
                         <span className="font-medium">
                           Qty: {item.quantityRequested}
