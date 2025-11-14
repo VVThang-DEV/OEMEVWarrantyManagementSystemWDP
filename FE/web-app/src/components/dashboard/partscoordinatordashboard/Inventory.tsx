@@ -11,9 +11,13 @@ import {
   Layers,
   Boxes,
   Loader,
+  PlusCircle,
 } from "lucide-react";
+
 import AllocateComponentModal from "./AllocationModal";
 import TransferComponentModal from "./TransferModal";
+import RestockRequestModal from "./RestockRequestModal";
+
 import { warehouseService } from "@/services/warehouseService";
 import { usePolling } from "@/hooks/usePolling";
 
@@ -29,13 +33,37 @@ export default function Inventory() {
   const [filteredComponents, setFilteredComponents] = useState<Component[]>([]);
   const [isAllocModalOpen, setAllocModalOpen] = useState(false);
   const [isTransferModalOpen, setTransferModalOpen] = useState(false);
+  const [isRestockModalOpen, setRestockModalOpen] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "quantity">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [loading, setLoading] = useState(false);
   const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
 
-  // Real-time polling for inventory (20s interval)
+  // ⭐ STATE CẦN THÊM
+  const [warehouseId, setWarehouseId] = useState<string>("");
+  const [warehouseName, setWarehouseName] = useState<string>("Loading...");
+
+  // ⭐ Load warehouse khi page mở
+  useEffect(() => {
+    async function loadWarehouse() {
+      try {
+        const data = await warehouseService.getWarehouseInfo();
+
+        if (data.warehouses.length > 0) {
+          setWarehouseId(data.warehouses[0].warehouseId);
+          setWarehouseName(data.warehouses[0].name);
+        }
+      } catch (err) {
+        console.error("Error loading warehouse:", err);
+      }
+    }
+
+    loadWarehouse();
+  }, []);
+
+  // Real-time polling
   const { isPolling } = usePolling(
     async () => {
       const data = await warehouseService.getComponents();
@@ -44,15 +72,18 @@ export default function Inventory() {
       return data;
     },
     {
-      interval: 30000, // Poll every 30 seconds
-      enabled: !loading && !isAllocModalOpen && !isTransferModalOpen,
+      interval: 30000,
+      enabled:
+        !loading &&
+        !isAllocModalOpen &&
+        !isTransferModalOpen &&
+        !isRestockModalOpen,
       onError: (err) => {
         console.error("❌ Inventory polling error:", err);
       },
     }
   );
 
-  // Fetch components
   const fetchComponents = async () => {
     setLoading(true);
     try {
@@ -70,11 +101,10 @@ export default function Inventory() {
     fetchComponents();
   }, []);
 
-  // Filter and search
+  // Filtering + sorting
   useEffect(() => {
     let filtered = [...components];
 
-    // Search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (c) =>
@@ -83,14 +113,12 @@ export default function Inventory() {
       );
     }
 
-    // Stock filter
     if (stockFilter === "low") {
       filtered = filtered.filter((c) => c.quantity > 0 && c.quantity < 10);
     } else if (stockFilter === "out") {
       filtered = filtered.filter((c) => c.quantity === 0);
     }
 
-    // Sort
     filtered.sort((a, b) => {
       if (sortBy === "name") {
         return sortOrder === "asc"
@@ -134,6 +162,7 @@ export default function Inventory() {
             Manage components for your service center
           </p>
         </div>
+
         <div className="flex gap-3">
           {isPolling && (
             <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
@@ -143,6 +172,7 @@ export default function Inventory() {
               </span>
             </div>
           )}
+
           <button
             onClick={() => setAllocModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all font-medium text-sm"
@@ -150,12 +180,21 @@ export default function Inventory() {
             <Send className="w-4 h-4" />
             Allocate
           </button>
+
           <button
             onClick={() => setTransferModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all font-medium text-sm"
           >
             <Layers className="w-4 h-4" />
             Transfer
+          </button>
+
+          <button
+            onClick={() => setRestockModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium text-sm"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Request Restock
           </button>
         </div>
       </div>
@@ -172,7 +211,6 @@ export default function Inventory() {
             </span>
           </div>
           <p className="text-3xl font-bold text-gray-900">{totalComponents}</p>
-          <p className="text-sm text-gray-500 mt-1">In inventory</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6">
@@ -183,7 +221,6 @@ export default function Inventory() {
             <span className="text-sm font-medium text-gray-600">Low Stock</span>
           </div>
           <p className="text-3xl font-bold text-gray-900">{lowStockCount}</p>
-          <p className="text-sm text-gray-500 mt-1">Needs restock</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6">
@@ -196,13 +233,11 @@ export default function Inventory() {
             </span>
           </div>
           <p className="text-3xl font-bold text-gray-900">{outOfStockCount}</p>
-          <p className="text-sm text-gray-500 mt-1">Unavailable</p>
         </div>
       </div>
 
-      {/* Filters & Search */}
+      {/* Search + Filter */}
       <div className="flex items-center gap-4">
-        {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -210,38 +245,39 @@ export default function Inventory() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by component name or code..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white"
           />
         </div>
 
-        {/* Stock Filter */}
         <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
           <button
             onClick={() => setStockFilter("all")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
               stockFilter === "all"
                 ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                : "text-gray-600"
             }`}
           >
             All
           </button>
+
           <button
             onClick={() => setStockFilter("low")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
               stockFilter === "low"
                 ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                : "text-gray-600"
             }`}
           >
             Low Stock
           </button>
+
           <button
             onClick={() => setStockFilter("out")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
               stockFilter === "out"
                 ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                : "text-gray-600"
             }`}
           >
             Out
@@ -249,7 +285,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Components Table */}
+      {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50">
@@ -264,15 +300,17 @@ export default function Inventory() {
                       setSortOrder("asc");
                     }
                   }}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-600 uppercase tracking-wider hover:text-gray-900"
+                  className="flex items-center gap-2 text-xs font-semibold text-gray-600 uppercase"
                 >
                   Component Name
                   <ArrowUpDown className="w-4 h-4" />
                 </button>
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                 Code
               </th>
+
               <th className="px-6 py-4 text-left">
                 <button
                   onClick={() => {
@@ -283,45 +321,35 @@ export default function Inventory() {
                       setSortOrder("asc");
                     }
                   }}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-600 uppercase tracking-wider hover:text-gray-900"
+                  className="flex items-center gap-2 text-xs font-semibold text-gray-600 uppercase"
                 >
                   Quantity
                   <ArrowUpDown className="w-4 h-4" />
                 </button>
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                 Status
               </th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-gray-200">
             <AnimatePresence>
               {loading ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Loader className="w-8 h-8 text-gray-400 animate-spin" />
-                      <p className="text-sm text-gray-500">
-                        Loading inventory...
-                      </p>
-                    </div>
+                    <Loader className="w-8 h-8 text-gray-400 animate-spin" />
+                    <p className="text-sm text-gray-500 mt-2">
+                      Loading inventory...
+                    </p>
                   </td>
                 </tr>
               ) : filteredComponents.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Package className="w-12 h-12 text-gray-300" />
-                      <p className="text-gray-500">No components found</p>
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery("")}
-                          className="text-sm text-gray-900 hover:underline"
-                        >
-                          Clear search
-                        </button>
-                      )}
-                    </div>
+                    <Package className="w-12 h-12 text-gray-300 mx-auto" />
+                    <p className="text-gray-500 mt-2">No components found</p>
                   </td>
                 </tr>
               ) : (
@@ -334,7 +362,7 @@ export default function Inventory() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ delay: index * 0.03 }}
-                      className="hover:bg-gray-50 transition-colors"
+                      className="hover:bg-gray-50"
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -346,16 +374,19 @@ export default function Inventory() {
                           </p>
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm text-gray-600">
                           {component.code}
                         </span>
                       </td>
+
                       <td className="px-6 py-4">
                         <span className="font-semibold text-gray-900">
                           {component.quantity}
                         </span>
                       </td>
+
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${status.color}`}
@@ -372,7 +403,7 @@ export default function Inventory() {
         </table>
       </div>
 
-      {/* Modals */}
+      {/* MODALS */}
       <AllocateComponentModal
         isOpen={isAllocModalOpen}
         onClose={() => {
@@ -380,12 +411,24 @@ export default function Inventory() {
           fetchComponents();
         }}
       />
+
       <TransferComponentModal
         isOpen={isTransferModalOpen}
         onClose={() => {
           setTransferModalOpen(false);
           fetchComponents();
         }}
+      />
+
+      <RestockRequestModal
+        isOpen={isRestockModalOpen}
+        onClose={() => {
+          setRestockModalOpen(false);
+          fetchComponents();
+        }}
+        components={components}
+        warehouseId={warehouseId}
+        warehouseName={warehouseName}
       />
     </div>
   );
