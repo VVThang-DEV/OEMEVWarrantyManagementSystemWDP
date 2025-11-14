@@ -173,7 +173,7 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [approvedCaseLineIds, rejectedCaseLineIds, approverEmail]
+ *             required: [approvedCaseLineIds, rejectedCaseLineIds]
  *             properties:
  *               approvedCaseLineIds:
  *                 type: array
@@ -183,10 +183,6 @@ router.post(
  *                 type: array
  *                 items: { type: object, properties: { id: { type: string, format: uuid } } }
  *                 description: Mảng ID của các mục bị từ chối.
- *               approverEmail:
- *                 type: string
- *                 format: email
- *                 description: Email của người duyệt (khách hàng) đã được xác thực.
  *     responses:
  *       200:
  *         description: Xử lý các mục sửa chữa thành công.

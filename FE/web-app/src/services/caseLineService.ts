@@ -76,7 +76,6 @@ export interface UpdateCaseLineResponse {
 export interface ApproveCaseLinesData {
   approvedCaseLineIds?: { id: string }[];
   rejectedCaseLineIds?: { id: string }[];
-  approverEmail: string; // Required for OTP verification
 }
 
 export interface ApproveCaseLinesResponse {
@@ -237,17 +236,20 @@ class CaseLineService {
 
   /**
    * Update case line information
-   * PATCH /case-lines/{caselineId}
+   * PATCH /guarantee-cases/{caseId}/case-lines/{caselineId}
+   * Note: Backend controller requires both caseId and caselineId in URL params
    */
   async updateCaseLine(
     caselineId: string,
     data: UpdateCaseLineData
   ): Promise<UpdateCaseLineResponse> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { caseId, ...bodyData } = data;
+      if (!caseId) {
+        throw new Error("caseId is required to update case line");
+      }
       const response = await apiClient.patch(
-        `/case-lines/${caselineId}`,
+        `/guarantee-cases/${caseId}/case-lines/${caselineId}`,
         bodyData
       );
       return response.data;
