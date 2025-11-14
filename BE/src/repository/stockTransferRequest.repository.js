@@ -178,7 +178,7 @@ class StockTransferRequestRepository {
             {
               model: CaseLine,
               as: "caseline",
-              attributes: ["caselineId", "guaranteeCaseId"],
+              attributes: ["id", "guaranteeCaseId"],
               required: false,
               include: [
                 {
