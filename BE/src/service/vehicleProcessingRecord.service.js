@@ -677,6 +677,8 @@ class VehicleProcessingRecordService {
     page,
     limit,
     status,
+    startDate,
+    endDate,
   }) => {
     if (!serviceCenterId) {
       throw new BadRequestError("serviceCenterId is required");
@@ -694,6 +696,8 @@ class VehicleProcessingRecordService {
       status: status,
       userId: userId,
       roleName: roleName,
+      startDate: startDate,
+      endDate: endDate,
     });
 
     if (!records || records.length === 0) {

@@ -11,6 +11,7 @@ import {
   getCaseLineByIdParamsSchema,
   getAllCaselinesQuerySchema,
   validateOldComponentSerialSchema,
+  markRepairCompletedBodySchema,
 } from "../../validators/caseLine.validator.js";
 
 import {
@@ -456,6 +457,19 @@ router.patch(
  *         required: true
  *         schema: { type: string, format: uuid }
  *         description: ID của mục sửa chữa đã hoàn tất.
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               installationImageUrls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uri
+ *                 description: Mảng các URL hình ảnh sau khi lắp đặt.
  *     responses:
  *       200:
  *         description: Đánh dấu hoàn tất thành công.
@@ -466,12 +480,13 @@ router.patch(
  *       404:
  *         description: Không tìm thấy mục sửa chữa.
  *       409:
- *         description: Xung đột (trạng thái không phải là `IN_PROGRESS`).
+ *         description: Xung đột (trạng thái không phải là `IN_REPAIR`).
  */
 router.patch(
   "/:caselineId/mark-repair-complete",
   authentication,
   authorizationByRole(["service_center_technician"]),
+  validate(markRepairCompletedBodySchema, "body"),
   async (req, res, next) => {
     const caseLineController = req.container.resolve("caseLineController");
 

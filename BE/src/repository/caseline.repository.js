@@ -111,6 +111,7 @@ class CaseLineRepository {
         "rejectionReason",
         "evidenceImageUrls",
         "updatedAt",
+        "installationImageUrls",
       ],
       include: [
         {
@@ -195,6 +196,7 @@ class CaseLineRepository {
         "evidenceImageUrls",
         "updatedAt",
         "evidenceImageUrls",
+        "installationImageUrls",
       ],
       where: {
         id: {
@@ -268,6 +270,29 @@ class CaseLineRepository {
       where: { id: caselineId },
       transaction: transaction,
     });
+
+    if (rowsUpdated <= 0) {
+      return null;
+    }
+
+    const updatedCaseLine = await CaseLine.findByPk(caselineId, {
+      transaction: transaction,
+    });
+
+    return updatedCaseLine ? updatedCaseLine.toJSON() : null;
+  };
+
+  updateInstallationImages = async (
+    { caselineId, installationImageUrls },
+    transaction = null
+  ) => {
+    const [rowsUpdated] = await CaseLine.update(
+      { installationImageUrls: installationImageUrls },
+      {
+        where: { id: caselineId },
+        transaction: transaction,
+      }
+    );
 
     if (rowsUpdated <= 0) {
       return null;

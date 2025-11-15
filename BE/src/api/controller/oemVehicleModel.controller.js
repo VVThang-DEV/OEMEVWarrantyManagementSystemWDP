@@ -31,6 +31,25 @@ class OemVehicleModelController {
       data: result,
     });
   };
+
+  getMostProblematicModels = async (req, res) => {
+    const { companyId } = req;
+    const { startDate, endDate, limit } = req.query;
+
+    const results = await this.#oemVehicleModelService.getMostProblematicModels(
+      {
+        companyId,
+        startDate,
+        endDate,
+        limit,
+      }
+    );
+
+    res.status(200).json({
+      status: "success",
+      data: results,
+    });
+  };
 }
 
 export default OemVehicleModelController;

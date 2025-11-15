@@ -38,3 +38,9 @@ export const createVehicleModelSchema = Joi.object({
     .min(1)
     .required(),
 });
+
+export const getMostProblematicModelsSchema = Joi.object({
+  limit: Joi.number().integer().min(1).optional(),
+  startDate: Joi.date().iso().optional(),
+  endDate: Joi.date().iso().greater(Joi.ref("startDate")).optional(),
+});

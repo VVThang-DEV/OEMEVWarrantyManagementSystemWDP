@@ -106,3 +106,7 @@ export const validateOldComponentSerialSchema = Joi.object({
   caseLineId: Joi.string().uuid({ version: "uuidv4" }).required(),
   oldComponentSerialNumber: Joi.string().required(),
 });
+
+export const markRepairCompletedBodySchema = Joi.object({
+  installationImageUrls: Joi.array().items(Joi.string().uri()).optional(),
+});
