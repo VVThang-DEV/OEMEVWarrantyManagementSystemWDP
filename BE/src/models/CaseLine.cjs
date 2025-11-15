@@ -90,6 +90,13 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: [],
         field: "evidence_image_urls",
       },
+
+      installationImageUrls: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: [],
+        field: "installation_image_urls",
+      },
     },
     {
       tableName: "case_line",

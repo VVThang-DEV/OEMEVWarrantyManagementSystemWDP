@@ -106,6 +106,7 @@ class CaseLineService {
         ...caseline,
         guaranteeCaseId: guaranteeCaseId,
         diagnosticTechId: techId,
+        repairTechId: techId,
       }));
 
       const newCaseLines = await this.#caselineRepository.bulkCreate(
@@ -210,6 +211,7 @@ class CaseLineService {
           warrantyStatus: processedCaseline.warrantyStatus,
           rejectionReason: processedCaseline.rejectionReason,
           diagnosticTechId: techId,
+          repairTechId: techId,
           evidenceImageUrls: processedCaseline.evidenceImageUrls,
         },
         transaction
@@ -963,7 +965,8 @@ class CaseLineService {
     caselineId,
     userId,
     roleName,
-    serviceCenterId
+    serviceCenterId,
+    installationImageUrls
   ) => {
     const rawResult = await db.sequelize.transaction(async (transaction) => {
       const caseline = await this.#caselineRepository.findById(
@@ -1055,6 +1058,13 @@ class CaseLineService {
       if (!updatedCaseline) {
         throw new ConflictError(
           "Failed to update caseline status to COMPLETED"
+        );
+      }
+
+      if (installationImageUrls && installationImageUrls.length > 0) {
+        await this.#caselineRepository.updateInstallationImages(
+          { caselineId, installationImageUrls },
+          transaction
         );
       }
 

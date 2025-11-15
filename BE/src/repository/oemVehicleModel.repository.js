@@ -1,6 +1,8 @@
 import db from "../models/index.cjs";
+import { Op } from "sequelize";
 
-const { VehicleModel } = db;
+const { VehicleModel, Vehicle, VehicleProcessingRecord, GuaranteeCase, CaseLine } =
+  db;
 
 class OemVehicleModelRepository {
   findBySku = async (sku, transaction = null, lock = null) => {
@@ -48,6 +50,75 @@ class OemVehicleModelRepository {
     });
 
     return record.toJSON();
+  };
+
+  findMostProblematicModels = async ({
+    companyId,
+    startDate,
+    endDate,
+    limit = 10,
+  }) => {
+    const dateFilter = {};
+    if (startDate) {
+      dateFilter[Op.gte] = startDate;
+    }
+    if (endDate) {
+      dateFilter[Op.lte] = endDate;
+    }
+
+    const results = await VehicleModel.findAll({
+      attributes: [
+        "vehicleModelId",
+        "vehicleModelName",
+        [
+          db.sequelize.fn("COUNT", db.sequelize.col("vehicles.vehicleRecord.guaranteeCases.caseLines.id")),
+          "caseLineCount",
+        ],
+      ],
+      include: [
+        {
+          model: Vehicle,
+          as: "vehicles",
+          attributes: [],
+          required: true,
+          include: [
+            {
+              model: VehicleProcessingRecord,
+              as: "vehicleRecord",
+              attributes: [],
+              required: true,
+              where: Object.keys(dateFilter).length ? { checkInDate: dateFilter } : {},
+              include: [
+                {
+                  model: GuaranteeCase,
+                  as: "guaranteeCases",
+                  attributes: [],
+                  required: true,
+                  include: [
+                    {
+                      model: CaseLine,
+                      as: "caseLines",
+                      attributes: [],
+                      required: true,
+                      where: { warrantyStatus: "ELIGIBLE" }, 
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      where: {
+        vehicleCompanyId: companyId,
+      },
+      group: ["VehicleModel.vehicleModelId", "VehicleModel.vehicleModelName"],
+      order: [[db.sequelize.literal("caseLineCount"), "DESC"]],
+      limit: limit,
+      subQuery: false,
+    });
+
+    return results.map((r) => r.toJSON());
   };
 }
 
