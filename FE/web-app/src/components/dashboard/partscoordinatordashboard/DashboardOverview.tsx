@@ -92,9 +92,9 @@ export function DashboardOverview({}: DashboardOverviewProps) {
         ]
       );
 
-      // Count low stock items (quantityAvailable < 5)
+      // Count low stock items (quantityAvailable < 10)
       const lowStock = inventory.filter(
-        (stock) => stock.quantityAvailable < 5
+        (stock) => stock.quantityAvailable < 10
       ).length;
 
       // Get shipments count
