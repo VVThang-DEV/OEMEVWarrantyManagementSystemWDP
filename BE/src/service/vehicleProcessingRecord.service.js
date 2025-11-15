@@ -434,19 +434,10 @@ class VehicleProcessingRecordService {
     const roomName = `service_center_staff_${serviceCenterId}`;
     const eventName = "vehicleProcessingRecordStatusUpdated";
     const notificationPayload = {
-      type: "system_alert",
-      priority: "medium",
-      title: "Case Cancelled",
-      message: `Vehicle processing record has been cancelled`,
-      timestamp: dayjs().toISOString(),
-      data: {
-        roomName,
-        record: rawResult.record,
-        status: "CANCELLED",
-        reason: reason ?? null,
-        navigationAction: "cases",
-        navigationId: rawResult.record.vehicleProcessingRecordId,
-      },
+      roomName,
+      record: rawResult.record,
+      status: "CANCELLED",
+      reason: reason ?? null,
     };
 
     await this.#notificationService.sendToRoom(
@@ -629,41 +620,28 @@ class VehicleProcessingRecordService {
     if (oldTechnicianId && oldTechnicianId !== technicianId) {
       const oldTechRoom = `user_${oldTechnicianId}`;
       const unassignPayload = {
-        type: "task_unassigned",
-        priority: "medium",
-        title: "Task Reassigned",
-        message: `You have been unassigned from a diagnosis task for VIN: ${updatedRecord?.vin}`,
-        timestamp: dayjs().toISOString(),
-        data: {
-          navigationAction: "tasks",
-          recordId: updatedRecord?.vehicleProcessingRecordId,
-          vin: updatedRecord?.vin,
-          reason: "Reassigned to another technician",
-        },
+        message: "You have been unassigned from a diagnosis task.",
+        recordId: updatedRecord?.vehicleProcessingRecordId,
+        vin: updatedRecord?.vin,
+        reason: "Reassigned to another technician",
+        timestamp: formatUTCtzHCM(dayjs()),
+        room: oldTechRoom,
       };
 
       this.#notificationService.sendToRoom(
         oldTechRoom,
-        "taskUnassigned",
+        "task_unassigned_notification",
         unassignPayload
       );
     }
 
     const room = `user_${technicianId}`;
-    const event = "caseAssigned";
+    const event = "new_task_assignment_notification";
     const payload = {
-      type: "case_assigned",
-      priority: "high",
-      title: "Case Assigned to You",
-      message: `You have been assigned a new diagnosis task for VIN: ${updatedRecord?.vin}`,
-      timestamp: dayjs().toISOString(),
-      data: {
-        navigationAction: "tasks",
-        navigationId: newTaskAssignment?.taskAssignmentId,
-        recordId: updatedRecord?.vehicleProcessingRecordId,
-        vin: updatedRecord?.vin,
-        assignmentDetails: formatUpdatedRecord,
-      },
+      message: "You have been assigned a new diagnosis task.",
+      assignmentDetails: formatUpdatedRecord,
+      timestamp: dayjs(),
+      room: room,
     };
 
     this.#notificationService.sendToRoom(room, event, payload);
@@ -699,6 +677,8 @@ class VehicleProcessingRecordService {
     page,
     limit,
     status,
+    startDate,
+    endDate,
   }) => {
     if (!serviceCenterId) {
       throw new BadRequestError("serviceCenterId is required");
@@ -716,6 +696,8 @@ class VehicleProcessingRecordService {
       status: status,
       userId: userId,
       roleName: roleName,
+      startDate: startDate,
+      endDate: endDate,
     });
 
     if (!records || records.length === 0) {

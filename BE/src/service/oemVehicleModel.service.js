@@ -54,6 +54,23 @@ class OemVehicleModelService {
       return vehicleModel;
     });
   };
+
+  getMostProblematicModels = async ({
+    companyId,
+    startDate,
+    endDate,
+    limit,
+  }) => {
+    const results =
+      await this.#oemVehicleModelRepository.findMostProblematicModels({
+        companyId,
+        startDate,
+        endDate,
+        limit,
+      });
+
+    return results;
+  };
 }
 
 export default OemVehicleModelService;

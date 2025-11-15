@@ -10,7 +10,6 @@ const {
   CaseLine,
   VehicleCompany,
   TypeComponent,
-  Customer,
 } = db;
 
 class VehicleProcessingRecordRepository {
@@ -341,6 +340,8 @@ class VehicleProcessingRecordRepository {
     status,
     userId,
     roleName,
+    startDate,
+    endDate,
   }) => {
     let whereCondition = {};
     if (roleName === "service_center_technician") {
@@ -354,11 +355,23 @@ class VehicleProcessingRecordRepository {
       };
     }
 
+    const where = {
+      ...(status ? { status } : {}),
+      ...whereCondition,
+    };
+
+    if (startDate || endDate) {
+      where.checkInDate = {};
+      if (startDate) {
+        where.checkInDate[Op.gte] = startDate;
+      }
+      if (endDate) {
+        where.checkInDate[Op.lte] = endDate;
+      }
+    }
+
     const { rows, count } = await VehicleProcessingRecord.findAndCountAll({
-      where: {
-        ...(status ? { status } : {}),
-        ...whereCondition,
-      },
+      where,
 
       attributes: [
         "vehicleProcessingRecordId",
@@ -380,19 +393,13 @@ class VehicleProcessingRecordRepository {
         {
           model: Vehicle,
           as: "vehicle",
-          attributes: ["vin", "licensePlate", "ownerId"],
+          attributes: ["vin"],
           required: false,
           include: [
             {
               model: VehicleModel,
               as: "model",
               attributes: [["vehicle_model_name", "name"], "vehicleModelId"],
-              required: false,
-            },
-            {
-              model: Customer,
-              as: "owner",
-              attributes: ["id", "fullName", "phone", "email"],
               required: false,
             },
           ],

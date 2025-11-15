@@ -106,6 +106,7 @@ class CaseLineService {
         ...caseline,
         guaranteeCaseId: guaranteeCaseId,
         diagnosticTechId: techId,
+        repairTechId: techId,
       }));
 
       const newCaseLines = await this.#caselineRepository.bulkCreate(
@@ -210,6 +211,7 @@ class CaseLineService {
           warrantyStatus: processedCaseline.warrantyStatus,
           rejectionReason: processedCaseline.rejectionReason,
           diagnosticTechId: techId,
+          repairTechId: techId,
           evidenceImageUrls: processedCaseline.evidenceImageUrls,
         },
         transaction
@@ -692,26 +694,11 @@ class CaseLineService {
         const roomName = `service_center_staff_${serviceCenterId}`;
         const eventName = "vehicleProcessingRecordStatusUpdated";
         const data = {
-          type: "case_updated",
-          priority: "medium",
-          title: "Case In Progress",
-          message: `Vehicle processing is now in progress`,
-          timestamp: dayjs().toISOString(),
-          data: {
-            vehicleProcessingRecordId,
-            status: "PROCESSING",
-            navigationAction: "cases",
-            navigationId: vehicleProcessingRecordId,
-          },
+          vehicleProcessingRecordId,
+          status: "PROCESSING",
         };
 
         await this.#notificationService.sendToRoom(roomName, eventName, data);
-        // Also emit to caseUpdated listener
-        await this.#notificationService.sendToRoom(
-          roomName,
-          "caseUpdated",
-          data
-        );
       }
 
       return { updatedApprovedCaseLines, updatedRejectedCaseLines };
@@ -950,17 +937,8 @@ class CaseLineService {
       const roomName = `user_${technicianId}`;
       const eventName = "newRepairTaskAssigned";
       const data = {
-        type: "case_assigned",
-        priority: "high",
-        title: "New Repair Task Assigned",
-        message: "You have been assigned a new repair task",
-        timestamp: dayjs().toISOString(),
-        data: {
-          taskAssignment,
-          caseline: updatedCaseline,
-          taskId: taskAssignment.taskAssignmentId,
-          navigationAction: "tasks",
-        },
+        taskAssignment,
+        caseline: updatedCaseline,
       };
 
       await this.#notificationService.sendToRoom(roomName, eventName, data);
@@ -987,7 +965,8 @@ class CaseLineService {
     caselineId,
     userId,
     roleName,
-    serviceCenterId
+    serviceCenterId,
+    installationImageUrls
   ) => {
     const rawResult = await db.sequelize.transaction(async (transaction) => {
       const caseline = await this.#caselineRepository.findById(
@@ -1082,6 +1061,13 @@ class CaseLineService {
         );
       }
 
+      if (installationImageUrls && installationImageUrls.length > 0) {
+        await this.#caselineRepository.updateInstallationImages(
+          { caselineId, installationImageUrls },
+          transaction
+        );
+      }
+
       const updatedTaskAssignment =
         await this.#taskAssignmentRepository.completeTaskByCaselineId(
           {
@@ -1125,26 +1111,11 @@ class CaseLineService {
         const roomName = `service_center_staff_${serviceCenterId}`;
         const eventName = "vehicleProcessingRecordStatusUpdated";
         const data = {
-          type: "case_updated",
-          priority: "high",
-          title: "Vehicle Ready for Pickup",
-          message: `Vehicle is ready for customer pickup`,
-          timestamp: dayjs().toISOString(),
-          data: {
-            roomName,
-            updatedRecord,
-            navigationAction: "cases",
-            navigationId: updatedRecord.vehicleProcessingRecordId,
-          },
+          roomName,
+          updatedRecord,
         };
 
         await this.#notificationService.sendToRoom(roomName, eventName, data);
-        // Also emit to caseUpdated listener
-        await this.#notificationService.sendToRoom(
-          roomName,
-          "caseUpdated",
-          data
-        );
       }
 
       return { updatedCaseline, updatedTaskAssignment };

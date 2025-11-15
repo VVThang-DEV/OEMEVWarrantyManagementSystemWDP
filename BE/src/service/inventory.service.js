@@ -303,21 +303,11 @@ class InventoryService {
         `parts_coordinator_company_${companyId}`,
         "inventory_adjustment_created",
         {
-          type: "system_alert",
-          priority: "medium",
-          title: `Inventory ${adjustmentType === "IN" ? "Added" : "Removed"}`,
-          message: `${quantity} item(s) ${
-            adjustmentType === "IN" ? "added to" : "removed from"
-          } inventory. Reason: ${reason}`,
-          timestamp: dayjs().toISOString(),
-          data: {
-            adjustment: newAdjustment,
-            updatedStock,
-            adjustmentType,
-            quantity,
-            reason,
-            navigationAction: "inventory",
-          },
+          adjustment: newAdjustment,
+          updatedStock,
+          adjustmentType,
+          quantity,
+          reason,
         }
       );
     } else if (stock.warehouse?.serviceCenterId) {
@@ -325,21 +315,11 @@ class InventoryService {
         `parts_coordinator_service_center_${stock.warehouse.serviceCenterId}`,
         "inventory_adjustment_created",
         {
-          type: "system_alert",
-          priority: "medium",
-          title: `Inventory ${adjustmentType === "IN" ? "Added" : "Removed"}`,
-          message: `${quantity} item(s) ${
-            adjustmentType === "IN" ? "added to" : "removed from"
-          } inventory. Reason: ${reason}`,
-          timestamp: dayjs().toISOString(),
-          data: {
-            adjustment: newAdjustment,
-            updatedStock,
-            adjustmentType,
-            quantity,
-            reason,
-            navigationAction: "inventory",
-          },
+          adjustment: newAdjustment,
+          updatedStock,
+          adjustmentType,
+          quantity,
+          reason,
         }
       );
     }
@@ -619,29 +599,13 @@ class InventoryService {
 
     for (const [roomName, items] of stocksByServiceCenter.entries()) {
       this.#notificationService.sendToRoom(roomName, "low_stock_alert", {
-        type: "system_alert",
-        priority: "high",
-        title: "Low Stock Alert",
-        message: `${items.length} item(s) are running low on stock`,
-        timestamp: dayjs().toISOString(),
-        data: {
-          stocks: items,
-          navigationAction: "inventory",
-        },
+        stocks: items,
       });
     }
 
     for (const [roomName, items] of stocksByCompany.entries()) {
       this.#notificationService.sendToRoom(roomName, "low_stock_alert", {
-        type: "system_alert",
-        priority: "high",
-        title: "Low Stock Alert",
-        message: `${items.length} item(s) are running low on stock`,
-        timestamp: dayjs().toISOString(),
-        data: {
-          stocks: items,
-          navigationAction: "inventory",
-        },
+        stocks: items,
       });
     }
 
