@@ -879,7 +879,7 @@ class StockTransferRequestService {
       await this.#componentRepository.bulkUpdateStatus(
         {
           componentIds: allComponentIds,
-          status: "IN_WAREHOUSE",
+          status: "IN_STOCK",
           requestId: null,
           warehouseId: warehouseId,
         },
