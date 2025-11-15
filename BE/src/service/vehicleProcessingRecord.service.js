@@ -845,6 +845,62 @@ class VehicleProcessingRecordService {
 
       const guaranteeCases = vehicleProcessingRecord?.guaranteeCases || [];
 
+      const allCaseLines = guaranteeCases.flatMap(
+        (guaranteeCase) => guaranteeCase.caseLines || []
+      );
+      const hasCaseLines = allCaseLines.length > 0;
+      const allRejectedByTech =
+        hasCaseLines &&
+        allCaseLines.every(
+          (caseLine) => caseLine.status === "REJECTED_BY_TECH"
+        );
+
+      if (allRejectedByTech) {
+        const guaranteeCaseIds = guaranteeCases
+          .map((guaranteeCase) => guaranteeCase.guaranteeCaseId)
+          .filter(Boolean);
+
+        let cancelledGuaranteeCases = [];
+        if (guaranteeCaseIds.length > 0) {
+          cancelledGuaranteeCases =
+            await this.#guaranteeCaseRepository.bulkUpdateStatus(
+              {
+                guaranteeCaseIds,
+                status: "CANCELLED",
+              },
+              transaction,
+              Transaction.LOCK.UPDATE
+            );
+        }
+
+        const cancelledRecord =
+          await this.#vehicleProcessingRecordRepository.updateStatus(
+            {
+              vehicleProcessingRecordId: vehicleProcessingRecordId,
+              status: "CANCELLED",
+            },
+            transaction
+          );
+
+        const recordDetail =
+          await this.#vehicleProcessingRecordRepository.findDetailById(
+            {
+              id: vehicleProcessingRecordId,
+              roleName,
+              userId,
+              serviceCenterId,
+            },
+            transaction
+          );
+
+        return {
+          record: recordDetail,
+          updatedGuaranteeCases: cancelledGuaranteeCases,
+          updatedCaseLines: [],
+          updatedRecord: cancelledRecord,
+        };
+      }
+
       for (const guaranteeCase of guaranteeCases) {
         if (guaranteeCase.status !== "IN_DIAGNOSIS") {
           throw new BadRequestError("Guarantee case is not in diagnosis");
@@ -915,17 +971,17 @@ class VehicleProcessingRecordService {
           transaction
         );
 
-      const roomName = `service_center_staff_${serviceCenterId}`;
-      const eventName = "vehicleProcessingRecordStatusUpdated";
-      const data = {
-        roomName,
-        record,
-      };
-
-      await this.#notificationService.sendToRoom(roomName, eventName, data);
-
       return { record, updatedGuaranteeCases, updatedCaseLines, updatedRecord };
     });
+
+    const roomName = `service_center_staff_${serviceCenterId}`;
+    const eventName = "vehicleProcessingRecordStatusUpdated";
+    const data = {
+      roomName,
+      record: rawResult.record,
+    };
+
+    await this.#notificationService.sendToRoom(roomName, eventName, data);
 
     return {
       record: rawResult.record,
