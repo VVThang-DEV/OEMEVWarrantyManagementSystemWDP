@@ -76,6 +76,7 @@ export interface UpdateCaseLineResponse {
 export interface ApproveCaseLinesData {
   approvedCaseLineIds?: { id: string }[];
   rejectedCaseLineIds?: { id: string }[];
+  approverEmail?: string; // Email of the person approving the case lines
 }
 
 export interface ApproveCaseLinesResponse {
@@ -324,13 +325,17 @@ class CaseLineService {
    *
    * @role service_center_technician
    */
-  async markRepairComplete(caselineId: string): Promise<{
+  async markRepairComplete(
+    caselineId: string,
+    installationImageUrls?: string[]
+  ): Promise<{
     status: "success";
     data: { caseline: CaseLine };
   }> {
     try {
       const response = await apiClient.patch(
-        `/case-lines/${caselineId}/mark-repair-complete`
+        `/case-lines/${caselineId}/mark-repair-complete`,
+        { installationImageUrls }
       );
       return response.data;
     } catch (error: unknown) {

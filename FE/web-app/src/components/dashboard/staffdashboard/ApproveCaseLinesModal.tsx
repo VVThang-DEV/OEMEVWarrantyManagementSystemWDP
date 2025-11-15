@@ -32,6 +32,7 @@ export function ApproveCaseLinesModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [approverEmail, setApproverEmail] = useState("");
   const [step, setStep] = useState<"confirm" | "success">("confirm");
 
   // Reset state when modal closes
@@ -40,6 +41,7 @@ export function ApproveCaseLinesModal({
       setStep("confirm");
       setError(null);
       setReason("");
+      setApproverEmail("");
     }
   }, [isOpen]);
 
@@ -54,6 +56,20 @@ export function ApproveCaseLinesModal({
       return;
     }
 
+    if (action === "approve" && !approverEmail.trim()) {
+      setError("Please provide approver email");
+      return;
+    }
+
+    // Validate email format
+    if (action === "approve") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(approverEmail)) {
+        setError("Please provide a valid email address");
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
 
@@ -63,6 +79,7 @@ export function ApproveCaseLinesModal({
           action === "approve" ? caseLineIds.map((id) => ({ id })) : [],
         rejectedCaseLineIds:
           action === "reject" ? caseLineIds.map((id) => ({ id })) : [],
+        approverEmail: action === "approve" ? approverEmail : undefined,
       };
 
       await caseLineService.approveCaseLines(payload);
@@ -244,6 +261,30 @@ export function ApproveCaseLinesModal({
                         rows={4}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
                       />
+                    </div>
+                  )}
+
+                  {/* Approver Email - Required for approvals */}
+                  {isApprove && (
+                    <div>
+                      <label
+                        htmlFor="approver-email"
+                        className="block text-sm font-medium text-gray-900 mb-2"
+                      >
+                        Approver Email <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        id="approver-email"
+                        type="email"
+                        value={approverEmail}
+                        onChange={(e) => setApproverEmail(e.target.value)}
+                        placeholder="Enter your email address"
+                        className="w-full px-4 py-3 text-black border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Your email will be recorded for approval tracking
+                      </p>
                     </div>
                   )}
 
