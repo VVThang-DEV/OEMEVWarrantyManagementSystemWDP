@@ -3,15 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
-import {
-  Home,
-  Package,
-  Settings,
-  Boxes,
-  Clock1,
-  Truck,
-  RotateCcw,
-} from "lucide-react";
+import { Home, Package, Boxes, Clock1, Truck, RotateCcw } from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
 
@@ -19,13 +11,9 @@ import {
   Sidebar,
   DashboardHeader,
   PartsCoordinatorDashboardOverview,
-  ComponentStatusManager,
 } from "@/components/dashboard";
 
 import Inventory from "@/components/dashboard/partscoordinatordashboard/Inventory";
-import { InventoryDashboard } from "@/components/inventory";
-import AllocateComponentModal from "@/components/dashboard/partscoordinatordashboard/AllocationModal";
-import TransferComponentModal from "@/components/dashboard/partscoordinatordashboard/TransferModal";
 import { ComponentReturnList } from "@/components/dashboard/partscoordinatordashboard/ComponentReturnList";
 import { StockHistoryList } from "@/components/dashboard/partscoordinatordashboard/StockHistoryList";
 import { AdjustmentList } from "@/components/dashboard/partscoordinatordashboard/AdjustmentList";
@@ -47,18 +35,13 @@ interface CurrentUser {
 }
 
 export default function PartsCoordinatorDashboard() {
-  useRoleProtection([
-    "parts_coordinator_service_center",
-    "parts_coordinator_company",
-  ]);
+  useRoleProtection(["parts_coordinator_service_center"]);
 
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
-  const [showAllocateModal, setShowAllocateModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showCreateAdjustment, setShowCreateAdjustment] = useState(false);
 
   const [warehouseId, setWarehouseId] = useState("");
@@ -88,10 +71,7 @@ export default function PartsCoordinatorDashboard() {
 
   const handleLogout = () => authService.logout();
 
-  const isServiceCenterCoordinator =
-    currentUser?.roleName === "parts_coordinator_service_center";
-
-  const baseNavItems = [
+  const navItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
     { id: "inventory", icon: Boxes, label: "Inventory" },
     { id: "restock", icon: Package, label: "Restock Requests" },
@@ -99,59 +79,24 @@ export default function PartsCoordinatorDashboard() {
     { id: "stock-history", icon: Clock1, label: "Stock History" },
     { id: "reservations", icon: Package, label: "Reservations" },
     { id: "pickups", icon: Package, label: "Component Pickups" },
+    { id: "receiving", icon: Truck, label: "Receive Shipments" },
   ];
-
-  const navItems = isServiceCenterCoordinator
-    ? [
-        ...baseNavItems,
-        { id: "receiving", icon: Truck, label: "Receive Shipments" },
-        { id: "status", icon: Settings, label: "Component Status" },
-      ]
-    : [
-        ...baseNavItems,
-        { id: "status", icon: Settings, label: "Component Status" },
-      ];
 
   const renderContent = () => {
     switch (activeNav) {
       case "dashboard":
         return <PartsCoordinatorDashboardOverview />;
 
-      case "inventory": {
-        const isCompanyCoordinator =
-          currentUser?.roleName === "parts_coordinator_company";
-
+      case "inventory":
         return (
           <div className="flex-1 overflow-auto">
             <div className="p-8">
-              {isCompanyCoordinator ? (
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-200 p-6 shadow-lg">
-                    <InventoryDashboard
-                      onOpenAllocate={() => setShowAllocateModal(true)}
-                      onOpenTransfer={() => setShowTransferModal(true)}
-                    />
-                  </div>
-
-                  <AllocateComponentModal
-                    isOpen={showAllocateModal}
-                    onClose={() => setShowAllocateModal(false)}
-                  />
-
-                  <TransferComponentModal
-                    isOpen={showTransferModal}
-                    onClose={() => setShowTransferModal(false)}
-                  />
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
-                  <Inventory />
-                </div>
-              )}
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
+                <Inventory />
+              </div>
             </div>
           </div>
         );
-      }
 
       case "restock":
         return (
@@ -188,20 +133,6 @@ export default function PartsCoordinatorDashboard() {
         );
 
       case "receiving":
-        if (!isServiceCenterCoordinator) {
-          return (
-            <div className="flex-1 overflow-auto">
-              <div className="p-8">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
-                  <p className="text-yellow-800">
-                    This feature is only available for Service Center Parts
-                    Coordinators.
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        }
         return (
           <div className="flex-1 overflow-auto">
             <div className="p-8">
@@ -231,9 +162,6 @@ export default function PartsCoordinatorDashboard() {
             </div>
           </div>
         );
-
-      case "status":
-        return <ComponentStatusManager />;
 
       default:
         return <PartsCoordinatorDashboardOverview />;

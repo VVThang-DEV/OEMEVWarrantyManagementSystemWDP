@@ -15,6 +15,7 @@ import componentReservationService from "@/services/componentReservationService"
 import stockTransferService from "@/services/stockTransferService";
 import inventoryService from "@/services/inventoryService";
 import { authService } from "@/services";
+import MostUsedComponents from "../MostUsedComponents";
 
 interface DashboardOverviewProps {
   onNavigate?: (nav: string) => void;
@@ -287,6 +288,15 @@ export function DashboardOverview({}: DashboardOverviewProps) {
                   </span>
                 </div>
               </div>
+            </motion.div>
+
+            {/* Most Used Components */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              <MostUsedComponents limit={5} showDateFilter={false} />
             </motion.div>
 
             {/* Workflow Instructions */}

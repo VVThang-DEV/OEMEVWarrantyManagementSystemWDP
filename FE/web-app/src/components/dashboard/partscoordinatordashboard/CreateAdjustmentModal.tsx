@@ -34,6 +34,7 @@ export default function CreateAdjustmentModal({
     setSerials([""]);
 
     loadStockList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const loadStockList = async () => {
@@ -238,6 +239,7 @@ export default function CreateAdjustmentModal({
 
                   {serials.length > 1 && (
                     <button
+                      type="button"
                       onClick={() => removeSerial(i)}
                       className="px-3 text-red-500 hover:text-red-700"
                     >
@@ -248,6 +250,7 @@ export default function CreateAdjustmentModal({
               ))}
 
               <button
+                type="button"
                 onClick={() => setSerials([...serials, ""])}
                 className="text-sm text-blue-600 font-medium hover:underline"
               >
@@ -274,6 +277,7 @@ export default function CreateAdjustmentModal({
 
                   {serials.length > 1 && (
                     <button
+                      type="button"
                       onClick={() => removeSerial(i)}
                       className="px-3 text-red-500 hover:text-red-700"
                     >
@@ -284,6 +288,7 @@ export default function CreateAdjustmentModal({
               ))}
 
               <button
+                type="button"
                 onClick={() => setSerials([...serials, ""])}
                 className="text-sm text-red-600 font-medium hover:underline"
               >

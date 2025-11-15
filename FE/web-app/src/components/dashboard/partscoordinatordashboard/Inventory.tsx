@@ -7,14 +7,10 @@ import {
   Search,
   AlertCircle,
   ArrowUpDown,
-  Send,
-  Layers,
   Boxes,
   Loader,
 } from "lucide-react";
 
-import AllocateComponentModal from "./AllocationModal";
-import TransferComponentModal from "./TransferModal";
 import { warehouseService } from "@/services/warehouseService";
 import { usePolling } from "@/hooks/usePolling";
 
@@ -28,34 +24,12 @@ interface Component {
 export default function Inventory() {
   const [components, setComponents] = useState<Component[]>([]);
   const [filteredComponents, setFilteredComponents] = useState<Component[]>([]);
-  const [isAllocModalOpen, setAllocModalOpen] = useState(false);
-  const [isTransferModalOpen, setTransferModalOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "quantity">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [loading, setLoading] = useState(false);
   const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
-
-  const [warehouseId, setWarehouseId] = useState<string>("");
-  const [warehouseName, setWarehouseName] = useState<string>("Loading...");
-
-  useEffect(() => {
-    async function loadWarehouse() {
-      try {
-        const data = await warehouseService.getWarehouseInfo();
-
-        if (data.warehouses.length > 0) {
-          setWarehouseId(data.warehouses[0].warehouseId);
-          setWarehouseName(data.warehouses[0].name);
-        }
-      } catch (err) {
-        console.error("Error loading warehouse:", err);
-      }
-    }
-
-    loadWarehouse();
-  }, []);
 
   const { isPolling } = usePolling(
     async () => {
@@ -66,7 +40,7 @@ export default function Inventory() {
     },
     {
       interval: 120000, // Poll every 2 minutes
-      enabled: !loading && !isAllocModalOpen && !isTransferModalOpen,
+      enabled: !loading,
       onError: (err) => {
         console.error("❌ Inventory polling error:", err);
       },
@@ -159,22 +133,6 @@ export default function Inventory() {
               </span>
             </div>
           )}
-
-          <button
-            onClick={() => setAllocModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all font-medium text-sm"
-          >
-            <Send className="w-4 h-4" />
-            Allocate
-          </button>
-
-          <button
-            onClick={() => setTransferModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all font-medium text-sm"
-          >
-            <Layers className="w-4 h-4" />
-            Transfer
-          </button>
         </div>
       </div>
 
@@ -378,22 +336,6 @@ export default function Inventory() {
           </tbody>
         </table>
       </div>
-
-      <AllocateComponentModal
-        isOpen={isAllocModalOpen}
-        onClose={() => {
-          setAllocModalOpen(false);
-          fetchComponents();
-        }}
-      />
-
-      <TransferComponentModal
-        isOpen={isTransferModalOpen}
-        onClose={() => {
-          setTransferModalOpen(false);
-          fetchComponents();
-        }}
-      />
     </div>
   );
 }
