@@ -170,6 +170,9 @@ export default function GuestChatWidget({
       const normalizedMsgs = msgs.map((msg) => ({
         ...msg,
         senderType: msg.senderType.toLowerCase() as "guest" | "staff",
+        // Backend sends createdAt but frontend expects sentAt
+        sentAt:
+          (msg as unknown as { createdAt?: string }).createdAt || msg.sentAt,
       }));
       setMessages(normalizedMsgs);
     } catch (err) {
@@ -224,6 +227,10 @@ export default function GuestChatWidget({
             senderType: data.newMessage.senderType.toLowerCase() as
               | "guest"
               | "staff",
+            // Backend sends createdAt but frontend expects sentAt
+            sentAt:
+              (data.newMessage as unknown as { createdAt?: string })
+                .createdAt || data.newMessage.sentAt,
           };
           setMessages((prev) => [...prev, normalizedMessage]);
           setIsTyping(false);
@@ -327,6 +334,10 @@ export default function GuestChatWidget({
             senderType: data.newMessage.senderType.toLowerCase() as
               | "guest"
               | "staff",
+            // Backend sends createdAt but frontend expects sentAt
+            sentAt:
+              (data.newMessage as unknown as { createdAt?: string })
+                .createdAt || data.newMessage.sentAt,
           };
           setMessages((prev) => [...prev, normalizedMessage]);
           setIsTyping(false);
@@ -583,7 +594,9 @@ export default function GuestChatWidget({
   };
 
   const formatTime = (dateString: string) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
     return date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",

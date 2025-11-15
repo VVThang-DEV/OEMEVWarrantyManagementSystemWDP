@@ -260,6 +260,10 @@ export default function StaffChatDashboard({
         senderType: data.newMessage.senderType.toLowerCase() as
           | "guest"
           | "staff",
+        // Backend sends createdAt but frontend expects sentAt
+        sentAt:
+          (data.newMessage as unknown as { createdAt?: string }).createdAt ||
+          data.newMessage.sentAt,
       };
       setMessages((prev) => [...prev, normalizedMessage]);
       setIsTyping(false);
@@ -479,7 +483,9 @@ export default function StaffChatDashboard({
   };
 
   const formatTime = (dateString: string) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
     return date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
@@ -487,7 +493,9 @@ export default function StaffChatDashboard({
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
