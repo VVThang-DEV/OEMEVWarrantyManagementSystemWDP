@@ -33,12 +33,12 @@ export function initializeSocket(httpServer) {
       socket.join(`parts_coordinator_service_center_${serviceCenterId}`);
     }
 
-    if (userId) {
+    if (roleName && serviceCenterId) {
       socket.join(`user_${userId}`);
     }
 
     if (roleName === "service_center_technician" && serviceCenterId) {
-      const roomName = `technician_service_center_${serviceCenterId}`;
+      const roomName = `service_center_technician_${serviceCenterId}`;
       socket.join(roomName);
     }
 
