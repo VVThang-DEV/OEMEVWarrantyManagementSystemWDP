@@ -9,7 +9,7 @@ module.exports = (sequelize, DataTypes) => {
         field: "id",
       },
       guestId: {
-        type: DataTypes.UUID,
+        type: DataTypes.STRING(64),
         allowNull: false,
         field: "guest_id",
       },

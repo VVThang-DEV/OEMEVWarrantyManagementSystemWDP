@@ -127,9 +127,18 @@ export async function startAnonymousChat(
     );
 
     return response.data.data.conversation;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error starting anonymous chat:", error);
-    throw error;
+    // Re-throw with more context
+    if (error && typeof error === "object" && "response" in error) {
+      const axiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      if (axiosError.response?.data?.message) {
+        throw new Error(axiosError.response.data.message);
+      }
+    }
+    throw new Error("Unable to start chat session. Please try again later.");
   }
 }
 
