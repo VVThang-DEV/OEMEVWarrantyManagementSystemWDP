@@ -41,3 +41,6 @@ export {
   DashboardOverview as PartsCoordinatorDashboardOverview,
   ComponentPickupList,
 } from "./partscoordinatordashboard";
+
+// Admin Dashboard Components
+export { MostProblematicModels } from "./admindashboard/MostProblematicModels";

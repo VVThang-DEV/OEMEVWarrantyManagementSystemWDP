@@ -35,13 +35,30 @@ export function ApproveCaseLinesModal({
   const [approverEmail, setApproverEmail] = useState("");
   const [step, setStep] = useState<"confirm" | "success">("confirm");
 
+  // Auto-fill approver email from token if available
+  useEffect(() => {
+    if (isOpen && action === "approve") {
+      try {
+        const userInfo = localStorage.getItem("userInfo");
+        if (userInfo) {
+          const parsed = JSON.parse(userInfo);
+          if (parsed.email) {
+            setApproverEmail(parsed.email);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to get user email:", err);
+      }
+    }
+  }, [isOpen, action]);
+
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
       setStep("confirm");
       setError(null);
       setReason("");
-      setApproverEmail("");
+      // Don't reset approverEmail here to keep auto-filled value
     }
   }, [isOpen]);
 
