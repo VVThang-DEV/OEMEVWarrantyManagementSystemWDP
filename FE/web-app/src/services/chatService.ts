@@ -126,7 +126,25 @@ export async function startAnonymousChat(
       payload
     );
 
-    return response.data.data.conversation;
+    const conversation = response.data.data.conversation;
+
+    // Map backend response to frontend interface
+    // Backend returns 'id' but frontend expects 'conversationId'
+    const backendConversation = conversation as unknown as {
+      id?: string;
+      conversationId?: string;
+      guestId: string;
+      status: ConversationStatus;
+      createdAt: string;
+    };
+
+    return {
+      conversationId:
+        backendConversation.id || backendConversation.conversationId || "",
+      guestId: backendConversation.guestId,
+      status: backendConversation.status,
+      createdAt: backendConversation.createdAt,
+    };
   } catch (error: unknown) {
     console.error("Error starting anonymous chat:", error);
     // Re-throw with more context
