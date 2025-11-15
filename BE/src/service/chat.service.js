@@ -3,6 +3,7 @@ import { NotFoundError } from "../error/index.js";
 import db from "../models/index.cjs";
 import crypto from "crypto";
 import process from "process";
+import dayjs from "dayjs";
 
 class ChatService {
   #guestRepository;
@@ -64,10 +65,19 @@ class ChatService {
     const roomName = `service_center_staff_${serviceCenterId}`;
     const eventName = "newConversation";
     const data = {
-      conversationId: rawtResult.id,
-      guestId: rawtResult.guestId,
-      serviceCenterId: serviceCenterId,
-      email: email,
+      type: "new_message",
+      priority: "medium",
+      title: "New Conversation",
+      message: "You have a new conversation",
+      timestamp: dayjs().toISOString(),
+      data: {
+        conversationId: rawtResult.id,
+        guestId: rawtResult.guestId,
+        serviceCenterId: serviceCenterId,
+        email: email,
+        navigationAction: "chat-support",
+        navigationId: rawtResult.id,
+      },
     };
 
     this.#notificationService.sendToRoom(roomName, eventName, data);

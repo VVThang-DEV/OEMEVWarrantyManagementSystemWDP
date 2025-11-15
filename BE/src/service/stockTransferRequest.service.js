@@ -100,11 +100,22 @@ class StockTransferRequestService {
 
     const roomName = `emv_staff_${companyId}`;
 
-    this.#notificationService.sendToRoom(
-      roomName,
-      "new_stock_transfer_request",
-      { request: rawResult.newStockTransferRequest }
-    );
+    this.#notificationService.sendToRoom(roomName, "stockTransferRequest", {
+      type: "stock_transfer_request",
+      priority: "medium",
+      title: "New Warehouse Restock Request",
+      message: `A new warehouse restock request #${rawResult.newStockTransferRequest.id.slice(
+        0,
+        8
+      )} has been created`,
+      timestamp: dayjs().toISOString(),
+      data: {
+        navigationAction: "stock-transfers",
+        navigationId: rawResult.newStockTransferRequest.id,
+        request: rawResult.newStockTransferRequest,
+        requestType: "WAREHOUSE_RESTOCK",
+      },
+    });
 
     return {
       newStockTransferRequest: {
@@ -168,11 +179,22 @@ class StockTransferRequestService {
 
     const roomName = `emv_staff_${companyId}`;
 
-    this.#notificationService.sendToRoom(
-      roomName,
-      "new_stock_transfer_request",
-      { request: rawResult.newStockTransferRequest }
-    );
+    this.#notificationService.sendToRoom(roomName, "stockTransferRequest", {
+      type: "stock_transfer_request",
+      priority: "medium",
+      title: "New Stock Transfer Request",
+      message: `A new stock transfer request #${rawResult.newStockTransferRequest.id.slice(
+        0,
+        8
+      )} has been created for caseline parts`,
+      timestamp: dayjs().toISOString(),
+      data: {
+        navigationAction: "stock-transfers",
+        navigationId: rawResult.newStockTransferRequest.id,
+        request: rawResult.newStockTransferRequest,
+        requestType: "CASELINE",
+      },
+    });
 
     return {
       newStockTransferRequest: {
@@ -391,7 +413,23 @@ class StockTransferRequestService {
 
     const roomName = `parts_coordinator_service_center_${requestWithDetails.requestingWarehouse.serviceCenterId}`;
     const eventName = "stock_transfer_request_approved";
-    const data = requestWithDetails;
+    const data = {
+      type: "stock_transfer_approved",
+      priority: "high",
+      title: "Stock Transfer Approved",
+      message: `Stock transfer request #${requestWithDetails.id.slice(
+        0,
+        8
+      )} has been approved`,
+      timestamp: dayjs().toISOString(),
+      data: {
+        ...requestWithDetails,
+        requestId: requestWithDetails.id,
+        navigationAction: "stock-transfers",
+        navigationId: requestWithDetails.id,
+        navigationType: "detail",
+      },
+    };
 
     this.#notificationService.sendToRoom(roomName, eventName, data);
 
@@ -557,7 +595,23 @@ class StockTransferRequestService {
 
     const roomName = `parts_coordinator_company_${companyId}`;
     const eventName = "stock_transfer_request_approved";
-    const data = requestWithDetails;
+    const data = {
+      type: "stock_transfer_approved",
+      priority: "high",
+      title: "Stock Transfer Approved",
+      message: `Stock transfer request #${requestWithDetails.id.slice(
+        0,
+        8
+      )} has been approved`,
+      timestamp: dayjs().toISOString(),
+      data: {
+        ...requestWithDetails,
+        requestId: requestWithDetails.id,
+        navigationAction: "stock-transfers",
+        navigationId: requestWithDetails.id,
+        navigationType: "detail",
+      },
+    };
 
     this.#notificationService.sendToRoom(roomName, eventName, data);
 
@@ -707,7 +761,22 @@ class StockTransferRequestService {
     const roomNamePartsCoordinatorServiceCenter = `parts_coordinator_service_center_${serviceCenterRequest}`;
 
     const eventName = "stock_transfer_request_shipped";
-    const data = { requestId };
+    const data = {
+      type: "stock_transfer_request",
+      priority: "medium",
+      title: "Stock Transfer Shipped",
+      message: `Stock transfer request #${requestId.slice(
+        0,
+        8
+      )} has been shipped`,
+      timestamp: dayjs().toISOString(),
+      data: {
+        requestId,
+        navigationAction: "stock-transfers",
+        navigationId: requestId,
+        navigationType: "detail",
+      },
+    };
 
     this.#notificationService.sendToRooms(
       [
@@ -897,11 +966,25 @@ class StockTransferRequestService {
       const roomName_service_center_manager = `service_center_manager_${serviceCenterId}`;
       const eventName = "stock_transfer_request_received";
       const data = {
-        requestWithDetails,
-        updatedCaselineStatus: relatedCaseLineIds?.map((caselineId) => ({
-          caselineId,
-          status: "PARTS_AVAILABLE",
-        })),
+        type: "stock_transfer_approved",
+        priority: "medium",
+        title: "Stock Transfer Received",
+        message: `Stock transfer request #${requestId.slice(
+          0,
+          8
+        )} has been received`,
+        timestamp: dayjs().toISOString(),
+        data: {
+          requestWithDetails,
+          requestId,
+          navigationAction: "stock-transfers",
+          navigationId: requestId,
+          navigationType: "detail",
+          updatedCaselineStatus: relatedCaseLineIds?.map((caselineId) => ({
+            caselineId,
+            status: "PARTS_AVAILABLE",
+          })),
+        },
       };
 
       this.#notificationService.sendToRooms(
@@ -1000,7 +1083,23 @@ class StockTransferRequestService {
       const roomNameServiceCenterManager = `service_center_manager_${requesterServiceCenterId}`;
 
       const eventName = "stock_transfer_request_rejected";
-      const data = { requestId };
+      const data = {
+        type: "stock_transfer_rejected",
+        priority: "high",
+        title: "Stock Transfer Rejected",
+        message: `Stock transfer request #${requestId.slice(
+          0,
+          8
+        )} was rejected: ${rejectionReason || "No reason provided"}`,
+        timestamp: dayjs().toISOString(),
+        data: {
+          requestId,
+          rejectionReason,
+          navigationAction: "stock-transfers",
+          navigationId: requestId,
+          navigationType: "detail",
+        },
+      };
 
       this.#notificationService.sendToRooms(
         [roomNameServiceCenterStaff, roomNameServiceCenterManager],
@@ -1105,7 +1204,23 @@ class StockTransferRequestService {
     const roomName = `emv_staff_${companyId}`;
 
     const eventName = "stock_transfer_request_cancelled";
-    const data = { updatedRequest };
+    const data = {
+      type: "system_alert",
+      priority: "medium",
+      title: "Stock Transfer Cancelled",
+      message: `Stock transfer request #${requestId.slice(
+        0,
+        8
+      )} has been cancelled`,
+      timestamp: dayjs().toISOString(),
+      data: {
+        updatedRequest,
+        requestId,
+        navigationAction: "stock-transfers",
+        navigationId: requestId,
+        navigationType: "detail",
+      },
+    };
 
     this.#notificationService.sendToRooms([roomName], eventName, data);
 

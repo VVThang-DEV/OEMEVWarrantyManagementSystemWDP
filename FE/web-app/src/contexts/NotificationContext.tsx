@@ -73,20 +73,166 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       .then((backendNotifications) => {
         // Convert backend format to frontend format
         const convertedNotifications: Notification[] = backendNotifications.map(
-          (n: NotificationResponse) => ({
-            id: n.notificationId,
-            type: (n.data?.type as NotificationType) || "general",
-            priority: (n.data?.priority as NotificationPriority) || "medium",
-            title: (n.data?.title as string) || "Notification",
-            message: (n.data?.message as string) || "",
-            timestamp: n.createdAt,
-            read: n.isRead,
-            actionUrl: n.data?.actionUrl as string,
-            data: n.data || {},
-            senderId: n.data?.senderId as string,
-            senderName: n.data?.senderName as string,
-            senderRole: n.data?.senderRole as string,
-          })
+          (n: NotificationResponse) => {
+            // Generate title and message based on eventName if not provided
+            let title = (n.data?.title as string) || "Notification";
+            let message = (n.data?.message as string) || "";
+            let type: NotificationType =
+              (n.data?.type as NotificationType) || "general";
+            let priority: NotificationPriority =
+              (n.data?.priority as NotificationPriority) || "medium";
+            let navigationAction = n.data?.navigationAction as string;
+
+            // Map eventName to user-friendly notifications
+            if (!n.data?.title) {
+              switch (n.eventName) {
+                case "vehicleProcessingRecordStatusUpdated":
+                  const status = n.data?.status as string;
+                  const record = n.data?.record as Record<string, unknown>;
+                  const vin =
+                    (record?.vin as string) ||
+                    n.data?.vehicleProcessingRecordId;
+
+                  if (status === "WAITING_CUSTOMER_APPROVAL") {
+                    type = "case_updated";
+                    priority = "high";
+                    title = "Case Awaiting Customer Approval";
+                    message = `Vehicle ${vin} diagnosis completed and awaiting customer approval`;
+                  } else if (status === "PROCESSING") {
+                    type = "case_updated";
+                    priority = "medium";
+                    title = "Case In Progress";
+                    message = `Vehicle ${vin} is now being processed`;
+                  } else if (status === "READY_FOR_PICKUP") {
+                    type = "case_updated";
+                    priority = "high";
+                    title = "Vehicle Ready for Pickup";
+                    message = `Vehicle ${vin} is ready for customer pickup`;
+                  } else if (status === "CANCELLED") {
+                    type = "system_alert";
+                    priority = "medium";
+                    title = "Case Cancelled";
+                    message = `Vehicle processing record ${vin} has been cancelled`;
+                  } else {
+                    type = "case_updated";
+                    priority = "medium";
+                    title = "Case Status Updated";
+                    message = `Vehicle ${vin} status changed to ${status}`;
+                  }
+                  navigationAction = "cases";
+                  break;
+
+                case "newRepairTaskAssigned":
+                  type = "case_assigned";
+                  priority = "high";
+                  title = "New Repair Task Assigned";
+                  message = "You have been assigned a new repair task";
+                  navigationAction = "tasks";
+                  break;
+
+                case "stock_transfer_request_approved":
+                  type = "stock_transfer_approved";
+                  priority = "high";
+                  title = "Stock Transfer Approved";
+                  const requestId1 = n.data?.requestId as string;
+                  message = `Stock transfer request #${String(requestId1).slice(
+                    0,
+                    8
+                  )} has been approved`;
+                  navigationAction = "stock-transfers";
+                  break;
+
+                case "stock_transfer_request_shipped":
+                  type = "stock_transfer_request";
+                  priority = "medium";
+                  title = "Stock Transfer Shipped";
+                  const requestId2 = n.data?.requestId as string;
+                  message = `Stock transfer request #${String(requestId2).slice(
+                    0,
+                    8
+                  )} has been shipped`;
+                  navigationAction = "stock-transfers";
+                  break;
+
+                case "stock_transfer_request_received":
+                  type = "stock_transfer_approved";
+                  priority = "medium";
+                  title = "Stock Transfer Received";
+                  const requestId3 = n.data?.requestId as string;
+                  message = `Stock transfer request #${String(requestId3).slice(
+                    0,
+                    8
+                  )} has been received`;
+                  navigationAction = "stock-transfers";
+                  break;
+
+                case "stock_transfer_request_rejected":
+                  type = "stock_transfer_rejected";
+                  priority = "high";
+                  title = "Stock Transfer Rejected";
+                  const requestId4 = n.data?.requestId as string;
+                  const reason =
+                    n.data?.rejectionReason || "No reason provided";
+                  message = `Stock transfer request #${String(requestId4).slice(
+                    0,
+                    8
+                  )} was rejected: ${reason}`;
+                  navigationAction = "stock-transfers";
+                  break;
+
+                case "newConversation":
+                  type = "new_message";
+                  priority = "medium";
+                  title = "New Conversation";
+                  message = "You have a new conversation";
+                  navigationAction = "chat-support";
+                  break;
+
+                case "inventory_adjustment_created":
+                  type = "system_alert";
+                  priority = "medium";
+                  const adjustmentType = n.data?.adjustmentType as string;
+                  const quantity = n.data?.quantity as number;
+                  const adjustReason = n.data?.reason as string;
+                  title = `Inventory ${
+                    adjustmentType === "IN" ? "Added" : "Removed"
+                  }`;
+                  message = `${quantity} item(s) ${
+                    adjustmentType === "IN" ? "added to" : "removed from"
+                  } inventory. Reason: ${adjustReason}`;
+                  navigationAction = "inventory";
+                  break;
+
+                case "low_stock_alert":
+                  type = "system_alert";
+                  priority = "high";
+                  title = "Low Stock Alert";
+                  const stocks =
+                    (n.data?.stocks as Record<string, unknown>[]) || [];
+                  message = `${stocks.length} item(s) are running low on stock`;
+                  navigationAction = "inventory";
+                  break;
+              }
+            }
+
+            return {
+              id: n.notificationId,
+              type,
+              priority,
+              title,
+              message,
+              timestamp: n.createdAt,
+              read: n.isRead,
+              actionUrl: n.data?.actionUrl as string,
+              data: {
+                ...n.data,
+                navigationAction: navigationAction || n.data?.navigationAction,
+              },
+              senderId: n.data?.senderId as string,
+              senderName: n.data?.senderName as string,
+              senderRole: n.data?.senderRole as string,
+            };
+          }
         );
         setNotifications(convertedNotifications);
         console.log(
@@ -141,18 +287,26 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // Mark notification as read
   const markAsRead = useCallback((notificationId: string) => {
+    console.log("🔄 markAsRead called for:", notificationId);
+
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
 
     // Sync with backend (ignore 404 if already read)
-    markNotificationAsReadAPI(notificationId).catch((error) => {
-      const axiosError = error as { response?: { status?: number } };
-      if (axiosError.response?.status !== 404) {
-        console.error("❌ Failed to mark notification as read:", error);
-      }
-      // 404 means already read or not found - UI already updated, ignore
-    });
+    markNotificationAsReadAPI(notificationId)
+      .then(() => {
+        console.log("✅ Backend confirmed mark as read:", notificationId);
+      })
+      .catch((error) => {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status !== 404) {
+          console.error("❌ Failed to mark notification as read:", error);
+        } else {
+          console.log("ℹ️ 404 response (already read or not found)");
+        }
+        // 404 means already read or not found - UI already updated, ignore
+      });
   }, []);
 
   // Mark all notifications as read
