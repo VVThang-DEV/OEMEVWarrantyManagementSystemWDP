@@ -3,7 +3,6 @@ import { NotFoundError } from "../error/index.js";
 import db from "../models/index.cjs";
 import crypto from "crypto";
 import process from "process";
-import dayjs from "dayjs";
 
 class ChatService {
   #guestRepository;
@@ -27,29 +26,16 @@ class ChatService {
   }
 
   startAnonymousChat = async ({ guestId, serviceCenterId, email }) => {
+    const { normalizedGuestId, normalizedEmail } = this.#resolveGuestIdentity({
+      guestId,
+      email,
+    });
+
     const rawtResult = await db.sequelize.transaction(async (t) => {
-      let actualGuestId = guestId;
-
-      let guestEmail = email ? email.toLowerCase() : null;
-
-      if (guestEmail) {
-        const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
-
-        if (!GUEST_TOKEN_SECRET) {
-          throw new Error(
-            "GUEST_TOKEN_SECRET is not defined in environment variables."
-          );
-        }
-        actualGuestId = crypto
-          .createHash("sha256")
-          .update(guestEmail + GUEST_TOKEN_SECRET)
-          .digest("hex");
-      }
-
       const guest = await this.#guestRepository.findOrCreate(
-        actualGuestId,
+        normalizedGuestId,
         t,
-        guestEmail
+        normalizedEmail
       );
 
       const conversation = await this.#conversationRepository.create(
@@ -65,19 +51,10 @@ class ChatService {
     const roomName = `service_center_staff_${serviceCenterId}`;
     const eventName = "newConversation";
     const data = {
-      type: "new_message",
-      priority: "medium",
-      title: "New Conversation",
-      message: "You have a new conversation",
-      timestamp: dayjs().toISOString(),
-      data: {
-        conversationId: rawtResult.id,
-        guestId: rawtResult.guestId,
-        serviceCenterId: serviceCenterId,
-        email: email,
-        navigationAction: "chat-support",
-        navigationId: rawtResult.id,
-      },
+      conversationId: rawtResult.id,
+      guestId: rawtResult.guestId,
+      serviceCenterId: serviceCenterId,
+      email: normalizedEmail,
     };
 
     this.#notificationService.sendToRoom(roomName, eventName, data);
@@ -86,22 +63,11 @@ class ChatService {
   };
 
   resumeByEmail = async ({ email }) => {
-    const guestEmail = email.toLowerCase();
+    const { normalizedGuestId } = this.#resolveGuestIdentity({
+      email,
+    });
 
-    const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
-
-    if (!GUEST_TOKEN_SECRET) {
-      throw new Error(
-        "GUEST_TOKEN_SECRET is not defined in environment variables."
-      );
-    }
-
-    const persistentGuestId = crypto
-      .createHash("sha256")
-      .update(guestEmail + GUEST_TOKEN_SECRET)
-      .digest("hex");
-
-    const guest = await this.#guestRepository.findById(persistentGuestId);
+    const guest = await this.#guestRepository.findById(normalizedGuestId);
 
     if (!guest) {
       throw new NotFoundError("No conversations found for this email.");
@@ -242,6 +208,60 @@ class ChatService {
     this.#chatNamespace.to(room).emit(event, data);
 
     return updatedConversation;
+  };
+
+  #resolveGuestIdentity = ({ guestId, email }) => {
+    const normalizedEmail =
+      typeof email === "string" && email.trim().length > 0
+        ? email.trim().toLowerCase()
+        : null;
+
+    if (normalizedEmail) {
+      const persistentGuestId =
+        this.#getPersistentGuestIdFromEmail(normalizedEmail);
+
+      return {
+        normalizedGuestId: persistentGuestId,
+        normalizedEmail,
+      };
+    }
+
+    const fallbackGuestId =
+      typeof guestId === "string" && guestId.trim().length > 0
+        ? guestId.trim()
+        : crypto.randomUUID();
+
+    if (fallbackGuestId.length <= 64) {
+      return {
+        normalizedGuestId: fallbackGuestId,
+        normalizedEmail: null,
+      };
+    }
+
+    const hashedGuestId = crypto
+      .createHash("sha256")
+      .update(fallbackGuestId)
+      .digest("hex");
+
+    return {
+      normalizedGuestId: hashedGuestId,
+      normalizedEmail: null,
+    };
+  };
+
+  #getPersistentGuestIdFromEmail = (email) => {
+    const GUEST_TOKEN_SECRET = process.env.GUEST_TOKEN_SECRET;
+
+    if (!GUEST_TOKEN_SECRET) {
+      throw new Error(
+        "GUEST_TOKEN_SECRET is not defined in environment variables."
+      );
+    }
+
+    return crypto
+      .createHash("sha256")
+      .update(email + GUEST_TOKEN_SECRET)
+      .digest("hex");
   };
 }
 
