@@ -291,13 +291,19 @@ export function getOrCreateGuestId(): string {
   const GUEST_ID_KEY = "guestChatId";
 
   if (typeof window === "undefined") {
-    return `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Use shorter hash: timestamp in base36 + random string
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substr(2, 6);
+    return `g_${timestamp}_${random}`;
   }
 
   let guestId = localStorage.getItem(GUEST_ID_KEY);
 
   if (!guestId) {
-    guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Use shorter hash: timestamp in base36 + random string
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substr(2, 6);
+    guestId = `g_${timestamp}_${random}`;
     localStorage.setItem(GUEST_ID_KEY, guestId);
   }
 
