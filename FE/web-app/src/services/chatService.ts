@@ -286,25 +286,38 @@ export async function closeConversation(conversationId: string): Promise<void> {
 
 /**
  * Generate a unique guest ID (stored in localStorage)
+ * Format: g_{base36_timestamp}_{random} - max 20 chars
  */
 export function getOrCreateGuestId(): string {
   const GUEST_ID_KEY = "guestChatId";
 
   if (typeof window === "undefined") {
-    // Use shorter hash: timestamp in base36 + random string
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 6);
+    // Ultra-short: 8-char timestamp + 5-char random = ~16 chars total
+    const timestamp = Date.now().toString(36).slice(-8);
+    const random = Math.random().toString(36).substr(2, 5);
     return `g_${timestamp}_${random}`;
   }
 
   let guestId = localStorage.getItem(GUEST_ID_KEY);
 
+  // Clear old guest ID if it's too long (from previous implementation)
+  if (guestId && guestId.length > 28) {
+    console.log("Clearing old guest ID (too long):", guestId.length, "chars");
+    localStorage.removeItem(GUEST_ID_KEY);
+    guestId = null;
+  }
+
   if (!guestId) {
-    // Use shorter hash: timestamp in base36 + random string
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 6);
+    // Ultra-short: 8-char timestamp + 5-char random = ~16 chars total
+    const timestamp = Date.now().toString(36).slice(-8);
+    const random = Math.random().toString(36).substr(2, 5);
     guestId = `g_${timestamp}_${random}`;
     localStorage.setItem(GUEST_ID_KEY, guestId);
+    console.log(
+      "Generated new guest ID:",
+      guestId,
+      `(${guestId.length} chars)`
+    );
   }
 
   return guestId;
