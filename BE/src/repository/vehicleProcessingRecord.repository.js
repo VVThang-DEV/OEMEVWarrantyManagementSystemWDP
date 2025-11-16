@@ -406,7 +406,7 @@ class VehicleProcessingRecordRepository {
             {
               model: Customer,
               as: "owner",
-              attributes: ["customerId", "name", "phone", "email"],
+              attributes: ["id", "fullName", "phone", "email"],
               required: false,
             },
           ],

@@ -635,7 +635,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                         <div>
                           <p className="text-xs text-gray-500">Owner</p>
                           <p className="text-sm font-medium text-gray-900">
-                            {record.vehicle?.owner?.name || "No Owner"}
+                            {record.vehicle?.owner?.fullName || "No Owner"}
                           </p>
                         </div>
                       </div>
@@ -735,7 +735,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                           Owner
                         </p>
                         <p className="text-sm text-gray-900">
-                          {selectedRecord.vehicle?.owner?.name ||
+                          {selectedRecord.vehicle?.owner?.fullName ||
                             "No Owner Registered"}
                         </p>
                       </div>
