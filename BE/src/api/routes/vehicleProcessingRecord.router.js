@@ -2,6 +2,7 @@ import { createRecordSchema } from "../../validators/vehicleProcessingRecord.val
 import {
   updateMainTechnicianBodySchema,
   updateMainTechnicianParamsSchema,
+  getAllRecordsSchema,
 } from "../../validators/vehicleProcessingRecord.validator.js";
 import {
   attachCompanyContext,
