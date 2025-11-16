@@ -428,6 +428,9 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                             const waitingForParts = caseLines.filter(
                               (cl) => cl.status === "WAITING_FOR_PARTS"
                             ).length;
+                            const partsAvailable = caseLines.filter(
+                              (cl) => cl.status === "PARTS_AVAILABLE"
+                            ).length;
                             const readyForRepair = caseLines.filter(
                               (cl) => cl.status === "READY_FOR_REPAIR"
                             ).length;
@@ -441,6 +444,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                               (cl) =>
                                 cl.status === "CUSTOMER_APPROVED" ||
                                 cl.status === "WAITING_FOR_PARTS" ||
+                                cl.status === "PARTS_AVAILABLE" ||
                                 cl.status === "READY_FOR_REPAIR" ||
                                 cl.status === "IN_REPAIR" ||
                                 cl.status === "COMPLETED"
@@ -475,6 +479,17 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                               statusBadge = (
                                 <span className="px-2 py-0.5 bg-orange-200 text-orange-800 rounded text-xs font-semibold">
                                   Waiting for Parts
+                                </span>
+                              );
+                            } else if (partsAvailable === totalLines) {
+                              buttonText = `View ${totalLines} Case Line${
+                                totalLines !== 1 ? "s" : ""
+                              }`;
+                              buttonStyle =
+                                "bg-teal-600 text-white hover:bg-teal-700";
+                              statusBadge = (
+                                <span className="px-2 py-0.5 bg-teal-200 text-teal-800 rounded text-xs font-semibold">
+                                  Parts Available
                                 </span>
                               );
                             } else if (readyForRepair === totalLines) {
@@ -620,7 +635,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                         <div>
                           <p className="text-xs text-gray-500">Owner</p>
                           <p className="text-sm font-medium text-gray-900">
-                            {record.vehicle?.owner?.fullName || "No Owner"}
+                            {record.vehicle?.owner?.name || "No Owner"}
                           </p>
                         </div>
                       </div>
@@ -720,7 +735,7 @@ export function CasesList({ onViewDetails }: CasesListProps) {
                           Owner
                         </p>
                         <p className="text-sm text-gray-900">
-                          {selectedRecord.vehicle?.owner?.fullName ||
+                          {selectedRecord.vehicle?.owner?.name ||
                             "No Owner Registered"}
                         </p>
                       </div>
@@ -959,8 +974,6 @@ export function CasesList({ onViewDetails }: CasesListProps) {
             setSelectedCaseLineIds([]);
             fetchRecords(); // Refresh the list
           }}
-          customerEmail={selectedRecord?.visitorInfo?.email}
-          vin={selectedRecord?.vin}
         />
 
         {/* Complete Record Modal */}

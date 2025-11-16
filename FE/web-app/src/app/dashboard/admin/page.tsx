@@ -3,19 +3,10 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
-import {
-  Home,
-  TrendingDown,
-  FileText,
-  BarChart3,
-} from "lucide-react";
+import { Home, TrendingDown, FileText, BarChart3 } from "lucide-react";
 import { authService } from "@/services";
 import { useRoleProtection } from "@/hooks/useRoleProtection";
-import {
-  Sidebar,
-  DashboardHeader,
-  MostProblematicModels,
-} from "@/components/dashboard";
+import { Sidebar, DashboardHeader } from "@/components/dashboard";
 
 interface CurrentUser {
   userId: string;
@@ -41,7 +32,11 @@ export default function AdminDashboard() {
 
   const navItems = [
     { id: "dashboard", icon: Home, label: "Dashboard" },
-    { id: "problematic-models", icon: TrendingDown, label: "Problematic Models" },
+    {
+      id: "problematic-models",
+      icon: TrendingDown,
+      label: "Problematic Models",
+    },
     { id: "analytics", icon: BarChart3, label: "Analytics" },
   ];
 
@@ -57,7 +52,7 @@ export default function AdminDashboard() {
               <p className="text-gray-600 mb-8">
                 Welcome back, EMV Administrator
               </p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                   <div className="flex items-center gap-3 mb-4">
@@ -104,8 +99,7 @@ export default function AdminDashboard() {
             </div>
           </div>
         );
-      case "problematic-models":
-        return <MostProblematicModels />;
+
       case "analytics":
         return (
           <div className="p-8">

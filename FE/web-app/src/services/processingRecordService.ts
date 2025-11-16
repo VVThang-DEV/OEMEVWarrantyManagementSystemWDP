@@ -11,6 +11,7 @@ export interface ProcessingRecord {
   vehicle: {
     vin: string;
     licensePlate?: string;
+    ownerId?: string;
     model:
       | {
           name: string;
@@ -19,8 +20,8 @@ export interface ProcessingRecord {
       | string;
     company?: string;
     owner?: {
-      id: string;
-      fullName: string;
+      customerId: string;
+      name: string;
       phone: string;
       email: string;
     };

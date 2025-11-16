@@ -56,6 +56,7 @@ export interface ProblematicModel {
   sku: string;
   totalIssues: number;
   companyName?: string;
+  [key: string]: string | number | undefined;
 }
 
 export interface MostProblematicModelsParams {

@@ -76,7 +76,6 @@ export interface UpdateCaseLineResponse {
 export interface ApproveCaseLinesData {
   approvedCaseLineIds?: { id: string }[];
   rejectedCaseLineIds?: { id: string }[];
-  approverEmail?: string; // Email of the person approving the case lines
 }
 
 export interface ApproveCaseLinesResponse {

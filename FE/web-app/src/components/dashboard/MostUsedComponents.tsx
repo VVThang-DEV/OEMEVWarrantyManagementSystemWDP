@@ -113,7 +113,7 @@ export default function MostUsedComponents({
 
       {/* Content */}
       <div className="p-6">
-        {components.length === 0 ? (
+        {!components || components.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500">No usage data available</p>
